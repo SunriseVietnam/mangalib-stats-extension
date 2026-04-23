@@ -2,7 +2,7 @@
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)]()
 
 > Расширение для Chrome, которое отслеживает и анализирует статистику тайтлов на MangaLib: оценки, количество читателей, динамику популярности и прогресс.
 
