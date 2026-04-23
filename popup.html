@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>MangaLib Stats</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📚 MangaLib Stats</h1>
+      <span class="badge" id="totalCount">0 тайтлов</span>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="overview">📊 Общая</button>
+      <button class="tab-btn" data-tab="list">📖 Список</button>
+      <button class="tab-btn" data-tab="add">➕ Добавить</button>
+      <button class="tab-btn" data-tab="history">📈 Динамика</button>
+      <button class="tab-btn" data-tab="export">💾 Экспорт</button>
+    </div>
+
+    <!-- Вкладка Общая статистика -->
+    <div id="tab-overview" class="tab-content active">
+      <div class="section">
+        <h3>🏆 Топ-5 по оценкам</h3>
+        <div id="topRated" class="top-list"></div>
+      </div>
+
+      <div class="section">
+        <h3>🆕 Недавние тайтлы</h3>
+        <div id="recentList" class="recent-list"></div>
+      </div>
+    </div>
+
+<!-- Вкладка Список всех тайтлов -->
+<div id="tab-list" class="tab-content">
+  <div class="update-all-btn-container">
+    <button id="updateAllBtn" class="btn-update-all">🔄 Обновить все тайтлы</button>
+    <span id="updateProgress" class="update-progress"></span>
+  </div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="🔍 Поиск по названию..." class="search-input">
+  </div>
+  <div id="mangaList" class="manga-list"></div>
+</div>
+
+<!-- Вкладка Добавление по ссылке -->
+<div id="tab-add" class="tab-content">
+  <div class="section">
+    <h3>➕ Добавить тайтлы по ссылкам</h3>
+    <p>Вставьте ссылки на тайтлы с MangaLib (можно несколько, разделяя запятой, пробелом или новой строкой):</p>
+    <div class="add-form">
+      <textarea id="mangaUrlsInput" rows="4" placeholder="https://mangalib.me/ru/manga/167422--priyut-dlya-demona
+https://mangalib.me/ru/manga/7634--jojo-no-kimyou-na-bouken-part-8-jojorion
+https://mangalib.me/ru/manga/147699--byla-li-ya" class="search-input textarea"></textarea>
+      <button id="addMangaBtn" class="btn-add">➕ Добавить все</button>
+    </div>
+    <div id="addProgress" class="add-progress"></div>
+  </div>
+
+  <div class="section">
+    <h3>📋 Примеры ссылок</h3>
+    <ul class="examples-list">
+      <li><code>https://mangalib.me/ru/manga/167422--priyut-dlya-demona</code></li>
+      <li><code>https://mangalib.me/ru/manga/7634--jojo-no-kimyou-na-bouken-part-8-jojorion</code></li>
+      <li><code>https://mangalib.me/ru/manga/147699--byla-li-ya?ui=6432353</code> (параметры отбрасываются)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>📊 Недавно добавленные</h3>
+    <div id="recentlyAdded" class="recently-added-list"></div>
+  </div>
+</div>
+
+    <!-- Вкладка Динамика -->
+    <div id="tab-history" class="tab-content">
+      <div class="section">
+        <h3>📈 Динамика по тайтлам</h3>
+        
+        <div class="compare-controls">
+          <div class="compare-column">
+            <label>Тайтл 1</label>
+            <input type="text" id="searchManga1" placeholder="Поиск тайтла..." class="search-input">
+            <div id="mangaList1" class="manga-select-list"></div>
+          </div>
+          <div class="compare-column">
+  <label>Тайтл 2 (опционально)</label>
+  <div style="display: flex; gap: 8px;">
+    <input type="text" id="searchManga2" placeholder="Поиск тайтла..." class="search-input" style="flex: 1;">
+    <button id="clearManga2" class="btn-clear" title="Очистить">✖</button>
+  </div>
+  <div id="mangaList2" class="manga-select-list"></div>
+</div>
+        </div>
+        
+        <div class="chart-controls">
+          <select id="chartMetric" class="chart-select">
+            <option value="averageRating">⭐ Оценка</option>
+            <option value="votesCount">📊 Количество оценок</option>
+            <option value="totalInLists">📚 Всего в списках</option>
+            <option value="reading">📖 Читаю</option>
+            <option value="planned">📅 В планах</option>
+            <option value="completed">✅ Прочитано</option>
+            <option value="favorite">❤️ Любимые</option>
+            <option value="dropped">❌ Брошено</option>
+            <option value="other">📌 Другое</option>
+          </select>
+          <select id="chartPeriod" class="chart-select">
+            <option value="7">За 7 дней</option>
+            <option value="14">За 14 дней</option>
+            <option value="30" selected>За 30 дней</option>
+            <option value="60">За 60 дней</option>
+            <option value="90">За 90 дней</option>
+            <option value="180">За 180 дней</option>
+            <option value="365">За 365 дней</option>
+          </select>
+        </div>
+        
+        <div class="comparison-chart-container">
+          <canvas id="comparisonChart" width="500" height="300" style="max-height: 300px; width: 100%; background: #313244; border-radius: 12px;"></canvas>
+        </div>
+        
+        <div class="selected-mangas-info">
+          <div id="selectedManga1Info" class="selected-info">Тайтл 1 не выбран</div>
+          <div id="selectedManga2Info" class="selected-info">Тайтл 2 не выбран</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Вкладка Экспорт -->
+    <div id="tab-export" class="tab-content">
+      <div class="section">
+        <h3>💾 Экспорт данных</h3>
+        <p>Экспортируйте всю статистику в JSON или CSV</p>
+        <div class="export-buttons">
+          <button id="exportJson" class="btn btn-primary">📄 Экспорт JSON</button>
+          <button id="exportCsv" class="btn btn-secondary">📊 Экспорт CSV</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>🗑 Управление данными</h3>
+        <button id="clearData" class="btn btn-danger">Очистить всю статистику</button>
+      </div>
+
+      <div class="section">
+        <h3>ℹ️ О расширении</h3>
+        <p>Версия 1.0.0</p>
+        <p>Расширение сохраняет статистику с страниц манги MangaLib:</p>
+        <ul>
+          <li>Средняя оценка и количество оценок</li>
+          <li>Количество в списках (всего и по категориям)</li>
+          <li>📈 История изменений по дням</li>
+          <li>➕ Добавление тайтлов по ссылке</li>
+        </ul>
+        <p style="margin-top: 8px; font-size: 11px; color: #a6adc8;">Данные обновляются автоматически при посещении страницы тайтла</p>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

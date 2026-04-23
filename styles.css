@@ -1,0 +1,801 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 450px;
+  min-height: 500px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+
+.container {
+  padding: 16px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #313244;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.badge {
+  background: #313244;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+}
+
+/* Табы */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: #313244;
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #a6adc8;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Статистика */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #313244;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #89b4fa;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #a6adc8;
+  margin-top: 4px;
+}
+
+/* Секции */
+.section {
+  margin-bottom: 20px;
+}
+
+.section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #89b4fa;
+}
+
+/* Сводка по спискам */
+.lists-summary {
+  background: #313244;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #45475a;
+  font-size: 13px;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-label {
+  color: #a6adc8;
+}
+
+/* Топ-5 */
+.top-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #313244;
+  font-size: 13px;
+}
+
+.top-rank {
+  width: 28px;
+  height: 28px;
+  background: #313244;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.top-title {
+  flex: 1;
+}
+
+.top-rating {
+  color: #f9e2af;
+}
+
+/* Недавние */
+.recent-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #313244;
+}
+
+.recent-title {
+  color: #89b4fa;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.recent-title:hover {
+  text-decoration: underline;
+}
+
+.recent-date {
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+/* Поиск и фильтры */
+.search-box {
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 10px;
+  color: #cdd6f4;
+  font-size: 13px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  background: #313244;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  cursor: pointer;
+  color: #a6adc8;
+  transition: all 0.2s;
+}
+
+.filter-btn.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+/* Список манги */
+.manga-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.btn-delete {
+  background: #f38ba8;
+  border: none;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  color: #1e1e2e;
+  transition: background 0.2s;
+  margin-left: 4px;
+}
+
+.btn-delete:hover {
+  background: #e64553;
+  color: white;
+}
+
+.manga-card {
+  background: #313244;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.manga-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.manga-title {
+  color: #89b4fa;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.manga-title:hover {
+  text-decoration: underline;
+}
+
+.manga-rating {
+  font-size: 12px;
+  color: #f9e2af;
+}
+
+.manga-card-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #a6adc8;
+  margin-bottom: 8px;
+}
+
+.manga-card-lists {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.list-badge {
+  background: #45475a;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  color: #a6adc8;
+}
+
+.list-badge.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+.manga-card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #6c7086;
+}
+
+/* Кнопки */
+.export-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+.btn-secondary {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.btn-danger {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+
+.btn-refresh {
+  width: 100%;
+  background: #313244;
+  color: #cdd6f4;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 16px;
+}
+
+.empty {
+  text-align: center;
+  color: #6c7086;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 16px;
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #313244;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #89b4fa;
+  border-radius: 3px;
+}
+
+/* Добавь в конец файла */
+
+/* Графики */
+.chart-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chart-select {
+  flex: 1;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #cdd6f4;
+  font-size: 12px;
+}
+
+/* История тайтлов */
+.history-manga-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.history-manga-item {
+  background: #313244;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  transition: background 0.2s;
+}
+
+.history-manga-item:hover {
+  background: #45475a;
+}
+
+.history-manga-stats {
+  font-size: 11px;
+  color: #f9e2af;
+}
+
+/* Кнопка истории */
+.btn-history {
+  background: #45475a;
+  border: none;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  color: #89b4fa;
+  transition: background 0.2s;
+}
+
+.btn-history:hover {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+/* Топ-5 с голосами */
+.top-votes {
+  font-size: 10px;
+  color: #a6adc8;
+  margin-left: 4px;
+}
+
+/* Недавние с доп. инфой */
+.recent-stats {
+  font-size: 10px;
+  color: #a6adc8;
+  margin-left: auto;
+}
+
+/* Добавь в конец файла */
+
+/* Блоки с графиками */
+.history-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.chart-block {
+  background: #1e1e2e;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.chart-block h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #89b4fa;
+}
+
+.chart-controls {
+  margin: 16px 0;
+}
+
+.chart-select {
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #cdd6f4;
+  font-size: 13px;
+  width: 100%;
+}
+
+.history-manga-item.selected {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+.history-manga-item.selected .history-manga-stats {
+  color: #1e1e2e;
+}
+
+/* Стили для сравнения тайтлов */
+.compare-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.compare-column {
+  flex: 1;
+  min-width: 200px;
+}
+
+.compare-column label {
+  display: block;
+  font-size: 12px;
+  color: #a6adc8;
+  margin-bottom: 6px;
+}
+
+.manga-select-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #1e1e2e;
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 100;
+  position: relative;
+}
+
+.manga-select-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #313244;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.manga-select-item:hover {
+  background: #313244;
+}
+
+.manga-select-stats {
+  font-size: 10px;
+  color: #a6adc8;
+}
+
+.comparison-chart-container {
+  margin-top: 16px;
+}
+
+.selected-mangas-info {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #313244;
+  border-radius: 8px;
+}
+
+.selected-info {
+  flex: 1;
+  font-size: 12px;
+  color: #89b4fa;
+}
+
+/* Стили для вкладки добавления */
+.add-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.add-form .search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.btn-add {
+  background: linear-gradient(135deg, #a6e3a1 0%, #89b4fa 100%);
+  color: #1e1e2e;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.btn-add:hover {
+  transform: scale(1.02);
+  opacity: 0.9;
+}
+
+.btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.add-progress {
+  background: #313244;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-top: 10px;
+  display: none;
+}
+
+.examples-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+.examples-list code {
+  background: #313244;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.recently-added-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recently-added-item {
+  background: #313244;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recently-added-title {
+  color: #89b4fa;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.recently-added-title:hover {
+  text-decoration: underline;
+}
+
+.recently-added-stats {
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+/* Кнопка обновления всех тайтлов */
+.update-all-btn-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-update-all {
+  background: linear-gradient(135deg, #89b4fa 0%, #667eea 100%);
+  color: #1e1e2e;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.btn-update-all:hover {
+  transform: scale(1.02);
+  opacity: 0.9;
+}
+
+.btn-update-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.update-progress {
+  font-size: 11px;
+  color: #a6adc8;
+  display: none;
+}
+
+/* Текстовое поле для нескольких ссылок */
+.textarea {
+  resize: vertical;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-form .search-input.textarea {
+  width: 100%;
+  padding: 10px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 10px;
+  color: #cdd6f4;
+  font-size: 11px;
+}
+
+.add-form .btn-add {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #a6e3a1 0%, #89b4fa 100%);
+  color: #1e1e2e;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.add-form .btn-add:hover {
+  transform: scale(1.02);
+  opacity: 0.9;
+}
+
+.add-form .btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.add-progress {
+  background: #313244;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin-top: 10px;
+  display: none;
+  font-family: monospace;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.examples-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+.examples-list code {
+  background: #313244;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  word-break: break-all;
+}
+
+.btn-clear {
+  background: #f38ba8;
+  color: #1e1e2e;
+  border: none;
+  width: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-clear:hover {
+  opacity: 0.8;
+  transform: scale(1.02);
+}
