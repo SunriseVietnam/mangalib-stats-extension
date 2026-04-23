@@ -27,4 +27,4 @@
 
 1. Скачайте или склонируйте репозиторий:
 ```bash
-git clone https://github.com/yourusername/mangalib-stats-tracker.git
+git clone https://github.com/SunriseVietnam/mangalib-stats-extension.git
