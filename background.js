@@ -1,32 +1,104 @@
-// background.js - управление хранилищем
+// background.js - управление хранилищем с использованием API
+const API_RULE_ID = 1;
+
+async function setupRules() {
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [API_RULE_ID],
+    addRules: [{
+      id: API_RULE_ID,
+      priority: 1,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: [{ header: 'Referer', operation: 'set', value: 'https://mangalib.me' }]
+      },
+      condition: { urlFilter: 'api.cdnlibs.org', resourceTypes: ['xmlhttprequest'] }
+    }]
+  });
+}
+
+chrome.runtime.onInstalled.addListener(setupRules);
 
 const STORAGE_KEY = 'mangalib_stats';
 const HISTORY_KEY = 'mangalib_history';
+const API_BASE = 'https://api.cdnlibs.org';
+const SITE_ID = 1;
+
+const getApiHeaders = () => ({
+  'Site-Id': String(SITE_ID),
+  'Referer': 'https://mangalib.me/',
+  'Accept': 'application/json'
+});
 
 async function initStorage() {
   const data = await chrome.storage.local.get([STORAGE_KEY, HISTORY_KEY]);
-  if (!data[STORAGE_KEY]) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: [] });
-  }
-  if (!data[HISTORY_KEY]) {
-    await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+  if (!data[STORAGE_KEY]) await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  if (!data[HISTORY_KEY]) await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+}
+
+const getDateKey = (date = new Date()) => date.toISOString().split('T')[0];
+const extractSlug = url => url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1] || null;
+const extractMangaId = url => url.match(/\/ru\/manga\/(\d+)/)?.[1] || null;
+
+async function fetchMangaInfo(slug) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/manga/${slug}?fields[]=summary&fields[]=genres&fields[]=authors&fields[]=chap_count&fields[]=rate_avg&fields[]=status_id`,
+      { method: 'GET', headers: getApiHeaders() }
+    );
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()).data;
+  } catch (error) {
+    console.error('[MangaLib API] Ошибка:', error);
+    return null;
   }
 }
 
-function getDateKey(date = new Date()) {
-  return date.toISOString().split('T')[0];
+async function fetchMangaStats(slug) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/manga/${slug}/stats?bookmarks=true&rating=true`,
+      { method: 'GET', headers: getApiHeaders() }
+    );
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()).data;
+  } catch (error) {
+    console.error('[MangaLib API] Ошибка получения статистики:', error);
+    return null;
+  }
 }
 
-function parseNumberWithSuffix(text) {
-  if (!text) return 0;
-  const clean = text.toString().trim().replace(/[^\d.KMkm]/g, '');
-  if (clean.includes('K') || clean.includes('k')) {
-    return Math.round(parseFloat(clean.replace(/[Kk]/g, '')) * 1000);
+async function fetchAllMangaData(mangaUrl) {
+  const slug = extractSlug(mangaUrl);
+  if (!slug) return null;
+  
+  const [info, stats] = await Promise.all([fetchMangaInfo(slug), fetchMangaStats(slug)]);
+  if (!info) return null;
+  
+  const listStats = { reading: 0, planned: 0, dropped: 0, completed: 0, favorite: 0, other: 0 };
+  if (stats?.bookmarks?.stats) {
+    for (const item of stats.bookmarks.stats) {
+      const map = { 'Читаю': 'reading', 'В планах': 'planned', 'Брошено': 'dropped', 'Прочитано': 'completed', 'Любимые': 'favorite', 'Другое': 'other' };
+      if (map[item.label]) listStats[map[item.label]] = item.value;
+    }
   }
-  if (clean.includes('M') || clean.includes('m')) {
-    return Math.round(parseFloat(clean.replace(/[Mm]/g, '')) * 1000000);
-  }
-  return parseInt(clean) || 0;
+  
+  const totalVotes = stats?.rating?.stats?.reduce((sum, item) => sum + item.value, 0) || 0;
+  
+  return {
+    id: extractMangaId(mangaUrl),
+    url: mangaUrl.split('?')[0],
+    title: info.rus_name || info.name,
+    chapters: info.items_count.uploaded,
+    averageRating: info.rating.average,
+    votesCount: totalVotes,
+    totalInLists: stats?.bookmarks?.count || 0,
+    listStats,
+    status: info.status?.label || 'неизвестен',
+    genres: info.genres?.map(g => g.name) || [],
+    author: info.authors?.[0]?.name || 'неизвестен',
+    lastVisited: new Date().toISOString(),
+    visitCount: 1
+  };
 }
 
 async function saveHistorySnapshot(mangaData) {
@@ -43,21 +115,15 @@ async function saveHistorySnapshot(mangaData) {
       averageRating: mangaData.averageRating,
       votesCount: mangaData.votesCount,
       totalInLists: mangaData.totalInLists,
-      listStats: { ...(mangaData.listStats || {}) }
+      listStats: { ...mangaData.listStats }
     };
     
-    if (existingIndex !== -1) {
-      history[existingIndex] = snapshot;
-    } else {
-      history.push(snapshot);
-    }
+    existingIndex !== -1 ? history[existingIndex] = snapshot : history.push(snapshot);
     
     const oneYearAgo = getDateKey(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
     history = history.filter(h => h.date >= oneYearAgo);
     await chrome.storage.local.set({ [HISTORY_KEY]: history });
-  } catch(e) {
-    console.error('Ошибка сохранения истории:', e);
-  }
+  } catch(e) { console.error('Ошибка сохранения истории:', e); }
 }
 
 async function saveMangaStats(mangaData) {
@@ -70,8 +136,8 @@ async function saveMangaStats(mangaData) {
     
     if (existingIndex !== -1) {
       const existing = mangas[existingIndex];
-      const updatedHistory = [...(existing.history || [])];
       const today = getDateKey();
+      const updatedHistory = [...(existing.history || [])];
       const lastHistoryEntry = updatedHistory[updatedHistory.length - 1];
       
       if (!lastHistoryEntry || lastHistoryEntry.date !== today) {
@@ -80,13 +146,15 @@ async function saveMangaStats(mangaData) {
           averageRating: mangaData.averageRating,
           votesCount: mangaData.votesCount,
           totalInLists: mangaData.totalInLists,
-          listStats: { ...(mangaData.listStats || {}) }
+          listStats: { ...mangaData.listStats }
         });
       } else {
-        lastHistoryEntry.averageRating = mangaData.averageRating;
-        lastHistoryEntry.votesCount = mangaData.votesCount;
-        lastHistoryEntry.totalInLists = mangaData.totalInLists;
-        lastHistoryEntry.listStats = { ...(mangaData.listStats || {}) };
+        Object.assign(lastHistoryEntry, {
+          averageRating: mangaData.averageRating,
+          votesCount: mangaData.votesCount,
+          totalInLists: mangaData.totalInLists,
+          listStats: { ...mangaData.listStats }
+        });
       }
       
       mangas[existingIndex] = {
@@ -104,7 +172,7 @@ async function saveMangaStats(mangaData) {
           averageRating: mangaData.averageRating,
           votesCount: mangaData.votesCount,
           totalInLists: mangaData.totalInLists,
-          listStats: { ...(mangaData.listStats || {}) }
+          listStats: { ...mangaData.listStats }
         }],
         firstVisited: mangaData.lastVisited,
         lastUpdated: mangaData.lastVisited,
@@ -121,186 +189,55 @@ async function saveMangaStats(mangaData) {
   }
 }
 
-async function getAllStats() {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || [];
-}
-
-async function getMangaHistory(mangaId) {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  const mangas = result[STORAGE_KEY] || [];
-  const manga = mangas.find(m => m.id === mangaId);
-  return manga?.history || [];
-}
+const getAllStats = async () => (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] || [];
+const getMangaHistory = async mangaId => (await getAllStats()).find(m => m.id === mangaId)?.history || [];
 
 async function deleteManga(mangaId) {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  let mangas = result[STORAGE_KEY] || [];
+  let mangas = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] || [];
   mangas = mangas.filter(m => m.id !== mangaId);
   await chrome.storage.local.set({ [STORAGE_KEY]: mangas });
   
-  const historyResult = await chrome.storage.local.get(HISTORY_KEY);
-  let history = historyResult[HISTORY_KEY] || [];
+  let history = (await chrome.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
   history = history.filter(h => h.mangaId !== mangaId);
   await chrome.storage.local.set({ [HISTORY_KEY]: history });
-  
   return mangas;
 }
 
-async function clearAllStats() {
-  await chrome.storage.local.set({ [STORAGE_KEY]: [] });
-  await chrome.storage.local.set({ [HISTORY_KEY]: [] });
-}
+const clearAllStats = async () => {
+  await chrome.storage.local.set({ [STORAGE_KEY]: [], [HISTORY_KEY]: [] });
+};
 
-// Функция обновления одного тайтла через открытие вкладки
-async function updateMangaViaTab(mangaUrl) {
-  const cleanUrl = mangaUrl.split('?')[0];
-  console.log('[MangaLib] Обновление:', cleanUrl);
-  
-  return new Promise((resolve) => {
-    let tabId = null;
-    let isResolved = false;
-    let attempts = 0;
-    const maxAttempts = 20;
-    
-    chrome.tabs.create({ url: cleanUrl, active: false }, (tab) => {
-      tabId = tab.id;
-      
-      const cleanup = () => {
-        if (tabId) {
-          try { chrome.tabs.remove(tabId); } catch(e) {}
-        }
-      };
-      
-      // Функция для повторных попыток получения данных
-      const tryGetData = () => {
-        if (isResolved) return;
-        attempts++;
-        
-        chrome.tabs.sendMessage(tabId, { type: 'GET_PAGE_DATA' }, (response) => {
-          if (chrome.runtime.lastError) {
-            if (attempts < maxAttempts) {
-              setTimeout(tryGetData, 1000);
-            } else {
-              cleanup();
-              resolve(null);
-              isResolved = true;
-            }
-            return;
-          }
-          
-          if (response && response.data) {
-            const data = response.data;
-            const hasData = data.chapters > 0 || data.votesCount > 0 || data.totalInLists > 0;
-            const hasValidTitle = data.title && data.title !== 'Неизвестно' && !data.title.includes('MangaLIB');
-            
-            if (hasData || hasValidTitle) {
-              cleanup();
-              resolve(data);
-              isResolved = true;
-            } else if (attempts < maxAttempts) {
-              setTimeout(tryGetData, 1000);
-            } else {
-              cleanup();
-              resolve(null);
-              isResolved = true;
-            }
-          } else if (attempts < maxAttempts) {
-            setTimeout(tryGetData, 1000);
-          } else {
-            cleanup();
-            resolve(null);
-            isResolved = true;
-          }
-        });
-      };
-      
-      // Ждём полной загрузки страницы
-      const onUpdated = (updatedTabId, changeInfo, tab) => {
-        if (updatedTabId === tabId && changeInfo.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(onUpdated);
-          setTimeout(tryGetData, 3000);
-        }
-      };
-      
-      chrome.tabs.onUpdated.addListener(onUpdated);
-      
-      // Таймаут
-      setTimeout(() => {
-        if (!isResolved) {
-          chrome.tabs.onUpdated.removeListener(onUpdated);
-          cleanup();
-          resolve(null);
-          isResolved = true;
-        }
-      }, 30000);
-    });
-  });
-}
+const updateMangaViaApi = async mangaUrl => {
+  const mangaData = await fetchAllMangaData(mangaUrl);
+  return mangaData?.title && mangaData.title !== 'Неизвестно' ? mangaData : null;
+};
+
+const addMangaByUrl = async mangaUrl => {
+  const mangaData = await fetchAllMangaData(mangaUrl);
+  if (mangaData?.title && mangaData.title !== 'Неизвестно') {
+    await saveMangaStats(mangaData);
+    return mangaData;
+  }
+  return null;
+};
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'SAVE_MANGA_STATS') {
-    saveMangaStats(message.data).then(mangas => {
-      sendResponse({ success: true, count: mangas.length });
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
+  const handlers = {
+    SAVE_MANGA_STATS: () => saveMangaStats(message.data).then(mangas => ({ success: true, count: mangas.length })),
+    GET_ALL_STATS: () => getAllStats().then(stats => ({ success: true, data: stats })),
+    GET_MANGA_HISTORY: () => getMangaHistory(message.mangaId).then(history => ({ success: true, data: history })),
+    DELETE_MANGA: () => deleteManga(message.mangaId).then(mangas => ({ success: true, count: mangas.length })),
+    ADD_MANGA_BY_URL: () => addMangaByUrl(message.url).then(data => data ? { success: true, data } : { success: false, error: 'Не удалось получить данные' }),
+    UPDATE_SINGLE_MANGA: () => updateMangaViaApi(message.mangaUrl).then(mangaData => mangaData ? saveMangaStats(mangaData).then(() => ({ success: true, data: mangaData })) : { success: false, error: 'Не удалось обновить' }),
+    CLEAR_ALL_STATS: () => clearAllStats().then(() => ({ success: true }))
+  };
+  
+  const handler = handlers[message.type];
+  if (handler) {
+    handler().then(sendResponse).catch(e => sendResponse({ success: false, error: e.message }));
     return true;
   }
-  
-  if (message.type === 'GET_ALL_STATS') {
-    getAllStats().then(stats => {
-      sendResponse({ success: true, data: stats });
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
-    return true;
-  }
-  
-  if (message.type === 'GET_MANGA_HISTORY') {
-    getMangaHistory(message.mangaId).then(history => {
-      sendResponse({ success: true, data: history });
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
-    return true;
-  }
-  
-  if (message.type === 'DELETE_MANGA') {
-    deleteManga(message.mangaId).then(mangas => {
-      sendResponse({ success: true, count: mangas.length });
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
-    return true;
-  }
-  
-  if (message.type === 'UPDATE_SINGLE_MANGA') {
-    updateMangaViaTab(message.mangaUrl).then(mangaData => {
-      if (mangaData) {
-        saveMangaStats(mangaData).then(() => {
-          sendResponse({ success: true, data: mangaData });
-        });
-      } else {
-        sendResponse({ success: false, error: 'Не удалось обновить' });
-      }
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
-    return true;
-  }
-  
-  if (message.type === 'CLEAR_ALL_STATS') {
-    clearAllStats().then(() => {
-      sendResponse({ success: true });
-    }).catch(e => {
-      sendResponse({ success: false, error: e.message });
-    });
-    return true;
-  }
-  
   return false;
 });
 
 initStorage();
-console.log('[MangaLib Stats] Background запущен');

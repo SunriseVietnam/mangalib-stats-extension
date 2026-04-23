@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "MangaLib Stats Tracker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Сохраняет и отображает статистику по тайтлам MangaLib",
   "permissions": [
     "storage",
-    "tabs"
+    "declarativeNetRequest"
   ],
   "host_permissions": [
-    "https://mangalib.me/*"
+    "https://mangalib.me/*",
+    "https://api.cdnlibs.org/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -18,7 +19,7 @@
       "128": "icons/icon128.png"
     }
   },
-  "content_scripts": [
+   "content_scripts": [
     {
       "matches": ["https://mangalib.me/ru/manga/*"],
       "js": ["content.js"],
