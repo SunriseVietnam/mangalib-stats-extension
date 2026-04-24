@@ -196,36 +196,99 @@ async function getStatsForDate(mangaId, date) {
   return history.find(h => h.date === date.split('T')[0]) || null;
 }
 
+// Обновление рейтинга с изменениями (с визуальной полосой)
 function updateRatingWithChanges(current, previous) {
   const ratingContainer = document.querySelector('.rating-info');
   if (!ratingContainer) return;
-  ratingContainer.querySelectorAll('.mangalib-rating-change, .mangalib-votes-change').forEach(el => el.remove());
+  ratingContainer.querySelectorAll('.mangalib-rating-change, .mangalib-rating-progress').forEach(el => el.remove());
 
   if (previous && current.averageRating !== undefined && previous.averageRating !== undefined) {
     const change = current.averageRating - previous.averageRating;
     if (change !== 0) {
+      // Текстовый индикатор
       const changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-rating-change', innerHTML: `${change > 0 ? '↑ +' : '↓ '}${change.toFixed(2)}` });
       changeSpan.style.cssText = `margin-left:8px;font-size:11px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
       ratingContainer.appendChild(changeSpan);
+      
+      // Визуальный индикатор (дополнительная полоса)
+      const ratingValue = current.averageRating;
+      const previousRating = previous.averageRating;
+      const maxRating = 10;
+      
+      const ratingWrapper = ratingContainer.querySelector('.rating-info__value')?.parentElement;
+      if (ratingWrapper && !ratingWrapper.querySelector('.mangalib-rating-progress')) {
+        const progressContainer = document.createElement('div');
+        progressContainer.className = 'mangalib-rating-progress';
+        progressContainer.style.cssText = `
+          position: relative;
+          width: 100px;
+          height: 6px;
+          background: #313244;
+          border-radius: 3px;
+          margin-left: 8px;
+          display: inline-block;
+          vertical-align: middle;
+          overflow: hidden;
+        `;
+        
+        const currentBar = document.createElement('div');
+        currentBar.style.cssText = `
+          position: absolute;
+          height: 100%;
+          width: ${(ratingValue / maxRating) * 100}%;
+          background: #89b4fa;
+          border-radius: 3px;
+          z-index: 2;
+        `;
+        
+        const changeBar = document.createElement('div');
+        const changePercent = ((ratingValue - previousRating) / maxRating) * 100;
+        changeBar.style.cssText = `
+          position: absolute;
+          height: 100%;
+          width: ${Math.abs(changePercent)}%;
+          ${changePercent > 0 ? 'right: 0;' : 'left: 0;'}
+          background: ${changePercent > 0 ? '#a6e3a1' : '#f38ba8'};
+          border-radius: 3px;
+          z-index: 1;
+          opacity: 0.7;
+        `;
+        
+        progressContainer.appendChild(currentBar);
+        if (Math.abs(changePercent) > 0.5) {
+          progressContainer.appendChild(changeBar);
+        }
+        ratingWrapper.appendChild(progressContainer);
+      }
     }
   }
 
+  // Количество оценок
   const votesContainer = document.querySelector('.rating-info__votes');
   if (votesContainer && previous?.votesCount !== undefined && current.votesCount !== undefined) {
     const change = current.votesCount - previous.votesCount;
     if (change !== 0) {
-      const changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-votes-change', textContent: `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})` });
+      const changeSpan = document.querySelector('.mangalib-votes-change') || Object.assign(document.createElement('span'), { className: 'mangalib-votes-change' });
+      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
       changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
-      votesContainer.appendChild(changeSpan);
+      if (!votesContainer.querySelector('.mangalib-votes-change')) {
+        votesContainer.appendChild(changeSpan);
+      }
     }
   }
 }
 
+// Обновление прогресс-баров списков с изменениями
 function updateProgressBarsWithChanges(current, previous) {
   if (!previous) return;
+  
+  // Очищаем старые индикаторы
   clearAllIndicators();
+  
+  // Обновляем оценки
   updateRatingWithChanges(current, previous);
 
+  // Обновляем общее количество в списках
   const totalContainer = document.querySelector('[data-stats="bookmarks"] .section-title');
   if (totalContainer && current.totalInLists !== undefined && previous.totalInLists !== undefined) {
     const change = current.totalInLists - previous.totalInLists;
@@ -236,7 +299,9 @@ function updateProgressBarsWithChanges(current, previous) {
     }
   }
 
+  // Обновляем категории и их прогресс-бары
   const categoryMap = { 'Читаю': 'reading', 'В планах': 'planned', 'Брошено': 'dropped', 'Прочитано': 'completed', 'Любимые': 'favorite', 'Другое': 'other' };
+  
   for (const row of document.querySelectorAll('[data-stats="bookmarks"] .agt_n')) {
     const label = Object.keys(categoryMap).find(key => [...row.querySelectorAll('div, span')].some(el => el.innerText?.trim() === key));
     if (!label) continue;
@@ -245,12 +310,72 @@ function updateProgressBarsWithChanges(current, previous) {
     const currentCount = current.listStats?.[key] || 0;
     const previousCount = previous.listStats?.[key] || 0;
     const change = currentCount - previousCount;
+    
+    const progressBar = row.querySelector('.progress__bar');
+    const currentWidth = parseFloat(progressBar?.style.width) || 0;
+    
     if (change !== 0 && countEl) {
-      const changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-category-change', textContent: `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})` });
+      // Текстовый индикатор
+      const changeSpan = document.querySelector(`.mangalib-category-change[data-category="${key}"]`) || 
+        Object.assign(document.createElement('span'), { className: 'mangalib-category-change' });
+      changeSpan.setAttribute('data-category', key);
+      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
       changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
-      countEl.after(changeSpan);
+      if (!row.querySelector(`.mangalib-category-change[data-category="${key}"]`)) {
+        countEl.after(changeSpan);
+      }
+      
+      // Визуальный индикатор в прогресс-баре
+      if (progressBar && progressBar.parentElement) {
+        // Удаляем старый индикатор изменений
+        const oldChangeBar = progressBar.parentElement.querySelector('.mangalib-progress-change');
+        if (oldChangeBar) oldChangeBar.remove();
+        
+        // Рассчитываем изменение в процентах
+        const total = current.totalInLists;
+        const previousPercent = (previousCount / total) * 100;
+        const currentPercent = (currentCount / total) * 100;
+        const changePercent = currentPercent - previousPercent;
+        
+        if (Math.abs(changePercent) > 0.1) {
+          const changeBar = document.createElement('div');
+          changeBar.className = 'mangalib-progress-change';
+          changeBar.style.cssText = `
+            position: absolute;
+            top: 0;
+            height: 100%;
+            width: ${Math.abs(changePercent)}%;
+            ${changePercent > 0 ? 'right: 0;' : 'left: 0;'}
+            background: ${changePercent > 0 ? '#a6e3a1' : '#f38ba8'};
+            border-radius: inherit;
+            opacity: 0.7;
+            z-index: 1;
+          `;
+          progressBar.parentElement.style.position = 'relative';
+          progressBar.style.position = 'relative';
+          progressBar.style.zIndex = '2';
+          progressBar.parentElement.appendChild(changeBar);
+        }
+      }
     }
   }
+}
+
+// Очистка визуальных индикаторов в прогресс-барах
+function clearProgressBars() {
+  // Удаляем дополнительные полосы изменений из прогресс-баров
+  document.querySelectorAll('.mangalib-progress-change').forEach(el => el.remove());
+  
+  // Восстанавливаем оригинальные прогресс-бары
+  const progressBars = document.querySelectorAll('[data-stats="bookmarks"] .progress__bar');
+  progressBars.forEach(bar => {
+    const originalWidth = bar.style.width;
+    bar.style.width = originalWidth;
+    bar.style.position = '';
+    if (bar.parentElement) {
+      bar.parentElement.style.position = '';
+    }
+  });
 }
 
 async function fetchFreshDataViaApi(mangaId, mangaUrl) {
@@ -315,6 +440,7 @@ async function populateDateSelector(mangaId, currentStats, mangaUrl) {
     if (selected && updatedHistory.length) {
       const previousStats = updatedHistory.find(h => h.date === selected);
       if (previousStats) {
+        clearProgressBars();
         updateProgressBarsWithChanges(currentStats, previousStats);
         if (infoDiv) {
           const dateObj = new Date(selected);
@@ -323,6 +449,7 @@ async function populateDateSelector(mangaId, currentStats, mangaUrl) {
       }
     } else {
       clearAllIndicators();
+      clearProgressBars();
       if (infoDiv) infoDiv.innerHTML = '';
     }
   };
@@ -330,6 +457,7 @@ async function populateDateSelector(mangaId, currentStats, mangaUrl) {
   if (lastDate) {
     const previousStats = updatedHistory.find(h => h.date === lastDate);
     if (previousStats) {
+      clearProgressBars();
       updateProgressBarsWithChanges(currentStats, previousStats);
       if (infoDiv) {
         const dateObj = new Date(lastDate);
@@ -369,6 +497,10 @@ async function addChangeIndicator() {
     if (!mediaContent) return;
     
     const dateSelector = createDateSelector();
+    
+    const dateInput = document.getElementById('mangalib-compare-date');
+    if (dateInput) return;
+
     mediaContent.appendChild(dateSelector);
     
     await populateDateSelector(mangaId, currentStats, mangaUrl);
@@ -402,7 +534,7 @@ async function refreshDateSelector() {
 }
 
 function clearAllIndicators() {
-  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change').forEach(el => el.remove());
+  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change, .mangalib-rating-progress, .mangalib-progress-change').forEach(el => el.remove());
 }
 
 function createDateSelector() {
@@ -410,27 +542,6 @@ function createDateSelector() {
   selector.style.cssText = 'padding-bottom:16px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap';
   selector.innerHTML = `<input type="date" id="mangalib-compare-date" style="background:#313244;border:1px solid #45475a;border-radius:8px;padding:6px 10px;color:#cdd6f4;font-size:12px;cursor:pointer;font-family:monospace"><div id="mangalib-date-info" style="font-size:11px;color:#a6adc8"></div>`;
   return selector;
-}
-
-async function addChangeIndicator() {
-  const mangaId = parseMangaId();
-  if (!mangaId || !(await isMangaTracked(mangaId)) || document.querySelector('#mangalib-date-selector')) return;
-
-  const checkInterval = setInterval(async () => {
-    const bookmarksBlock = document.querySelector('[data-stats="bookmarks"]');
-    if (!bookmarksBlock) return;
-    clearInterval(checkInterval);
-
-    const currentStats = collectStats();
-    if (!currentStats) return;
-
-    const mediaContent = document.querySelector('.media-content.paper') || document.querySelector('.media-content');
-    if (!mediaContent) return;
-
-    mediaContent.appendChild(createDateSelector());
-    await populateDateSelector(mangaId, currentStats);
-  }, 2000);
-  setTimeout(() => clearInterval(checkInterval), 10000);
 }
 
 // ========== КНОПКА ТРЕКЕРА ==========
