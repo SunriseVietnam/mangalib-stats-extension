@@ -115,7 +115,8 @@ async function saveHistorySnapshot(mangaData) {
       averageRating: mangaData.averageRating,
       votesCount: mangaData.votesCount,
       totalInLists: mangaData.totalInLists,
-      listStats: { ...mangaData.listStats }
+      listStats: { ...mangaData.listStats },
+      ratingStats: { ...mangaData.ratingStats }
     };
     
     existingIndex !== -1 ? history[existingIndex] = snapshot : history.push(snapshot);

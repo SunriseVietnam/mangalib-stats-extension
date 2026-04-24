@@ -126,6 +126,23 @@ function collectStats() {
     }
   }
 
+  // Сбор статистики по оценкам (1-10) через data-stats-id
+  const ratingStats = {};
+  const ratingBlock = document.querySelector('[data-stats="rating"]');
+  if (ratingBlock) {
+    for (let i = 1; i <= 10; i++) {
+      const row = ratingBlock.querySelector(`.agt_n[data-stats-id="${i}"]`);
+      if (row) {
+        const countEl = row.querySelector('.agt_sm');
+        if (countEl && countEl.innerText) {
+          ratingStats[i] = parseInt(countEl.innerText) || 0;
+        } else {
+          ratingStats[i] = 0;
+        }
+      }
+    }
+  }
+
   // Статус
   let status = 'неизвестен';
   const statusLink = document.querySelector('a[href*="status"] span');
@@ -141,7 +158,22 @@ function collectStats() {
   const authorLink = [...document.querySelectorAll('a[href*="/people/"]')].find(link => link.innerText?.length > 0 && link.innerText.length < 50);
   if (authorLink) author = authorLink.innerText.trim();
 
-  return { id: mangaId, url: window.location.href.split('?')[0], title, chapters: chapters || 0, averageRating, votesCount: totalVotes, totalInLists, listStats, status, genres, author, lastVisited: new Date().toISOString(), visitCount: 1 };
+  return { 
+    id: mangaId, 
+    url: window.location.href.split('?')[0], 
+    title, 
+    chapters: chapters || 0, 
+    averageRating, 
+    votesCount: totalVotes, 
+    totalInLists, 
+    listStats, 
+    ratingStats,
+    status, 
+    genres, 
+    author, 
+    lastVisited: new Date().toISOString(), 
+    visitCount: 1 
+  };
 }
 
 // ========== УВЕДОМЛЕНИЯ ==========
@@ -196,7 +228,6 @@ async function getStatsForDate(mangaId, date) {
   return history.find(h => h.date === date.split('T')[0]) || null;
 }
 
-// Обновление рейтинга с изменениями (с визуальной полосой)
 function updateRatingWithChanges(current, previous) {
   const ratingContainer = document.querySelector('.rating-info');
   if (!ratingContainer) return;
@@ -209,57 +240,6 @@ function updateRatingWithChanges(current, previous) {
       const changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-rating-change', innerHTML: `${change > 0 ? '↑ +' : '↓ '}${change.toFixed(2)}` });
       changeSpan.style.cssText = `margin-left:8px;font-size:11px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
       ratingContainer.appendChild(changeSpan);
-      
-      // Визуальный индикатор (дополнительная полоса)
-      const ratingValue = current.averageRating;
-      const previousRating = previous.averageRating;
-      const maxRating = 10;
-      
-      const ratingWrapper = ratingContainer.querySelector('.rating-info__value')?.parentElement;
-      if (ratingWrapper && !ratingWrapper.querySelector('.mangalib-rating-progress')) {
-        const progressContainer = document.createElement('div');
-        progressContainer.className = 'mangalib-rating-progress';
-        progressContainer.style.cssText = `
-          position: relative;
-          width: 100px;
-          height: 6px;
-          background: #313244;
-          border-radius: 3px;
-          margin-left: 8px;
-          display: inline-block;
-          vertical-align: middle;
-          overflow: hidden;
-        `;
-        
-        const currentBar = document.createElement('div');
-        currentBar.style.cssText = `
-          position: absolute;
-          height: 100%;
-          width: ${(ratingValue / maxRating) * 100}%;
-          background: #89b4fa;
-          border-radius: 3px;
-          z-index: 2;
-        `;
-        
-        const changeBar = document.createElement('div');
-        const changePercent = ((ratingValue - previousRating) / maxRating) * 100;
-        changeBar.style.cssText = `
-          position: absolute;
-          height: 100%;
-          width: ${Math.abs(changePercent)}%;
-          ${changePercent > 0 ? 'right: 0;' : 'left: 0;'}
-          background: ${changePercent > 0 ? '#a6e3a1' : '#f38ba8'};
-          border-radius: 3px;
-          z-index: 1;
-          opacity: 0.7;
-        `;
-        
-        progressContainer.appendChild(currentBar);
-        if (Math.abs(changePercent) > 0.5) {
-          progressContainer.appendChild(changeBar);
-        }
-        ratingWrapper.appendChild(progressContainer);
-      }
     }
   }
 
@@ -268,27 +248,64 @@ function updateRatingWithChanges(current, previous) {
   if (votesContainer && previous?.votesCount !== undefined && current.votesCount !== undefined) {
     const change = current.votesCount - previous.votesCount;
     if (change !== 0) {
-      const changeSpan = document.querySelector('.mangalib-votes-change') || Object.assign(document.createElement('span'), { className: 'mangalib-votes-change' });
-      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
-      changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
-      if (!votesContainer.querySelector('.mangalib-votes-change')) {
+      let changeSpan = votesContainer.querySelector('.mangalib-votes-change');
+      if (!changeSpan) {
+        changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-votes-change' });
         votesContainer.appendChild(changeSpan);
       }
+      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
+      changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
     }
   }
 }
 
-// Обновление прогресс-баров списков с изменениями
+// Обновление таблицы оценок (от 1 до 10) с изменениями
+function updateRatingTableWithChanges(current, previous) {
+  if (!previous) return;
+  
+  // Проверяем, есть ли у previous данные об оценках
+  const hasPreviousRatingStats = previous.ratingStats && Object.keys(previous.ratingStats).length > 0;
+  
+  // Находим все строки с оценками внутри блока data-stats="rating"
+  const ratingBlock = document.querySelector('[data-stats="rating"]');
+  if (!ratingBlock) return;
+  
+  // Ищем все строки с оценками (у них есть data-stats-id от 1 до 10)
+  for (let i = 1; i <= 10; i++) {
+    const row = ratingBlock.querySelector(`.agt_n[data-stats-id="${i}"]`);
+    if (!row) continue;
+    
+    const countEl = row.querySelector('.agt_sm');
+    if (!countEl) continue;
+    
+    const currentCount = current.ratingStats?.[i] || 0;
+    const previousCount = previous.ratingStats?.[i] || 0;
+    const change = currentCount - previousCount;
+    
+    // Удаляем старый индикатор
+    const oldChangeSpan = row.querySelector('.mangalib-rating-table-change');
+    if (oldChangeSpan) oldChangeSpan.remove();
+    
+    // Показываем изменение только если:
+    // 1. Есть предыдущие данные
+    // 2. Изменение не равно нулю
+    // 3. Не первая запись (есть предыдущие данные)
+    if (hasPreviousRatingStats && change !== 0) {
+      const changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-rating-table-change' });
+      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
+      changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
+      countEl.after(changeSpan);
+    }
+  }
+}
+
 function updateProgressBarsWithChanges(current, previous) {
   if (!previous) return;
   
-  // Очищаем старые индикаторы
   clearAllIndicators();
-  
-  // Обновляем оценки
   updateRatingWithChanges(current, previous);
+  updateRatingTableWithChanges(current, previous);
 
-  // Обновляем общее количество в списках
   const totalContainer = document.querySelector('[data-stats="bookmarks"] .section-title');
   if (totalContainer && current.totalInLists !== undefined && previous.totalInLists !== undefined) {
     const change = current.totalInLists - previous.totalInLists;
@@ -299,71 +316,85 @@ function updateProgressBarsWithChanges(current, previous) {
     }
   }
 
-  // Обновляем категории и их прогресс-бары
   const categoryMap = { 'Читаю': 'reading', 'В планах': 'planned', 'Брошено': 'dropped', 'Прочитано': 'completed', 'Любимые': 'favorite', 'Другое': 'other' };
   
   for (const row of document.querySelectorAll('[data-stats="bookmarks"] .agt_n')) {
     const label = Object.keys(categoryMap).find(key => [...row.querySelectorAll('div, span')].some(el => el.innerText?.trim() === key));
     if (!label) continue;
     const key = categoryMap[label];
-    const countEl = row.querySelector('.agt_sm');
     const currentCount = current.listStats?.[key] || 0;
     const previousCount = previous.listStats?.[key] || 0;
     const change = currentCount - previousCount;
     
     const progressBar = row.querySelector('.progress__bar');
-    const currentWidth = parseFloat(progressBar?.style.width) || 0;
+    if (!progressBar) continue;
     
-    if (change !== 0 && countEl) {
-      // Текстовый индикатор
-      const changeSpan = document.querySelector(`.mangalib-category-change[data-category="${key}"]`) || 
-        Object.assign(document.createElement('span'), { className: 'mangalib-category-change' });
-      changeSpan.setAttribute('data-category', key);
-      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
-      changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
-      if (!row.querySelector(`.mangalib-category-change[data-category="${key}"]`)) {
-        countEl.after(changeSpan);
-      }
+    // Получаем текущую ширину в процентах
+    const currentPercent = parseFloat(progressBar.style.width) || 0;
+    
+    // Удаляем старый индикатор
+    const oldChangeBar = progressBar.parentElement?.querySelector('.mangalib-progress-change');
+    if (oldChangeBar) oldChangeBar.remove();
+    
+    if (change !== 0) {
+      // Рассчитываем изменение в процентах
+      const total = current.totalInLists;
+      const changePercent = (Math.abs(change) / total) * 100;
       
-      // Визуальный индикатор в прогресс-баре
-      if (progressBar && progressBar.parentElement) {
-        // Удаляем старый индикатор изменений
-        const oldChangeBar = progressBar.parentElement.querySelector('.mangalib-progress-change');
-        if (oldChangeBar) oldChangeBar.remove();
+      if (changePercent > 0.1) {
+        // Создаём полосу изменений
+        const changeBar = document.createElement('div');
+        changeBar.className = 'mangalib-progress-change';
         
-        // Рассчитываем изменение в процентах
-        const total = current.totalInLists;
-        const previousPercent = (previousCount / total) * 100;
-        const currentPercent = (currentCount / total) * 100;
-        const changePercent = currentPercent - previousPercent;
-        
-        if (Math.abs(changePercent) > 0.1) {
-          const changeBar = document.createElement('div');
-          changeBar.className = 'mangalib-progress-change';
+        if (change > 0) {
+          // При росте: добавляем зелёную полосу справа
           changeBar.style.cssText = `
             position: absolute;
             top: 0;
+            right: 0;
             height: 100%;
-            width: ${Math.abs(changePercent)}%;
-            ${changePercent > 0 ? 'right: 0;' : 'left: 0;'}
-            background: ${changePercent > 0 ? '#a6e3a1' : '#f38ba8'};
-            border-radius: inherit;
-            opacity: 0.7;
+            width: ${changePercent}%;
+            background: rgba(166, 227, 161, 0.7);
+            border-radius: 0 3px 3px 0;
             z-index: 1;
           `;
-          progressBar.parentElement.style.position = 'relative';
-          progressBar.style.position = 'relative';
-          progressBar.style.zIndex = '2';
-          progressBar.parentElement.appendChild(changeBar);
+        } else {
+          // При падении: добавляем красную полосу (показывает потерю)
+          changeBar.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: ${currentPercent}%;
+            height: 100%;
+            width: ${changePercent}%;
+            background: rgba(243, 139, 168, 0.7);
+            border-radius: 0 3px 3px 0;
+            z-index: 1;
+          `;
         }
+        
+        progressBar.parentElement.style.position = 'relative';
+        progressBar.style.position = 'relative';
+        progressBar.style.zIndex = '2';
+        progressBar.parentElement.appendChild(changeBar);
+      }
+      
+      // Текстовый индикатор
+      const countEl = row.querySelector('.agt_sm');
+      if (countEl) {
+        let changeSpan = row.querySelector(`.mangalib-category-change[data-category="${key}"]`);
+        if (!changeSpan) {
+          changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-category-change' });
+          changeSpan.setAttribute('data-category', key);
+          countEl.after(changeSpan);
+        }
+        changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
+        changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
       }
     }
   }
 }
 
-// Очистка визуальных индикаторов в прогресс-барах
 function clearProgressBars() {
-  // Удаляем дополнительные полосы изменений из прогресс-баров
   document.querySelectorAll('.mangalib-progress-change').forEach(el => el.remove());
   
   // Восстанавливаем оригинальные прогресс-бары
@@ -472,51 +503,63 @@ async function addChangeIndicator() {
   const mangaUrl = window.location.href;
   if (!mangaId) return;
   
+  const urlParams = new URLSearchParams(window.location.search);
+  const section = urlParams.get('section');
+  const isInfoTab = !section || section === 'info';
+  
+  const existingSelector = document.querySelector('#mangalib-date-selector');
+  if (existingSelector) existingSelector.remove();
+  
+  if (!isInfoTab) {
+    return;
+  }
+  
   const isTracked = await isMangaTracked(mangaId);
   
   if (!isTracked) {
     return;
   }
   
-  if (document.querySelector('#mangalib-date-selector')) return;
+  let mediaContent = document.querySelector('.media-content.paper') || document.querySelector('.media-content');
   
-  const checkInterval = setInterval(async () => {
-    const bookmarksBlock = document.querySelector('[data-stats="bookmarks"]');
-    if (!bookmarksBlock) return;
-    
-    clearInterval(checkInterval);
-    
-    let currentStats = collectStats();
-    if (!currentStats) return;
-    
-    let mediaContent = document.querySelector('.media-content.paper');
-    if (!mediaContent) {
-      mediaContent = document.querySelector('.media-content');
-    }
-    
-    if (!mediaContent) return;
-    
-    const dateSelector = createDateSelector();
-    
-    const dateInput = document.getElementById('mangalib-compare-date');
-    if (dateInput) return;
-
-    mediaContent.appendChild(dateSelector);
-    
+  if (!mediaContent) {
+    setTimeout(async () => {
+      mediaContent = document.querySelector('.media-content.paper') || document.querySelector('.media-content');
+      if (mediaContent && !document.querySelector('#mangalib-date-selector')) {
+        const dateSelector = createDateSelector();
+        mediaContent.appendChild(dateSelector);
+        
+        const currentStats = collectStats();
+        if (currentStats) {
+          await populateDateSelector(mangaId, currentStats, mangaUrl);
+        }
+      }
+    }, 500);
+    return;
+  }
+  
+  const dateSelector = createDateSelector();
+  mediaContent.appendChild(dateSelector);
+  
+  const currentStats = collectStats();
+  if (currentStats) {
     await populateDateSelector(mangaId, currentStats, mangaUrl);
-  }, 2000);
-  
-  setTimeout(() => clearInterval(checkInterval), 10000);
+  }
 }
 
 async function refreshDateSelector() {
   const mangaId = parseMangaId();
   const mangaUrl = window.location.href;
   if (!mangaId) return;
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const section = urlParams.get('section');
+  const isInfoTab = !section || section === 'info';
+  
   const isTracked = await isMangaTracked(mangaId);
   const dateSelector = document.querySelector('#mangalib-date-selector');
   
-  if (!isTracked) {
+  if (!isInfoTab || !isTracked) {
     if (dateSelector) {
       dateSelector.remove();
     }
@@ -524,7 +567,16 @@ async function refreshDateSelector() {
   }
   
   if (!dateSelector) {
-    await addChangeIndicator();
+    const mediaContent = document.querySelector('.media-content.paper') || document.querySelector('.media-content');
+    if (mediaContent) {
+      const dateSelectorNew = createDateSelector();
+      mediaContent.appendChild(dateSelectorNew);
+      
+      const currentStats = collectStats();
+      if (currentStats) {
+        await populateDateSelector(mangaId, currentStats, mangaUrl);
+      }
+    }
   } else {
     const currentStats = collectStats();
     if (currentStats) {
@@ -534,7 +586,7 @@ async function refreshDateSelector() {
 }
 
 function clearAllIndicators() {
-  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change, .mangalib-rating-progress, .mangalib-progress-change').forEach(el => el.remove());
+  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change, .mangalib-rating-table-change, .mangalib-progress-change').forEach(el => el.remove());
 }
 
 function createDateSelector() {
@@ -557,59 +609,81 @@ async function createButton() {
   if (isCreatingButton) return false;
   if (document.querySelector('#mangalib-track-btn')) return true;
   
-  const buttonGroup = document.querySelector('.btns._group');
   const mangaId = parseMangaId();
-  if (!buttonGroup || !mangaId) return false;
-
+  if (!mangaId) return false;
+  
+  const headerElement = document.querySelector('[data-header]');
+  const isMobile = headerElement?.getAttribute('data-header') === 'mobile';
+  
+  let buttonContainer = document.querySelector('#mangalib-tracker-container');
+  let targetElement = null;
+  let buttonGroup = null;
+  
+  if (isMobile) {
+    buttonGroup = document.querySelector('.btn.is-outline.variant-light');
+  } else {
+    buttonGroup = document.querySelector('.btns._group');
+  }
+  
+  if (!buttonGroup) return false;
+  
   isCreatingButton = true;
   
   try {
-    let container = document.querySelector('#mangalib-tracker-container');
-    if (!container) {
-      container = Object.assign(document.createElement('div'), { id: 'mangalib-tracker-container' });
-      container.style.cssText = 'display:flex;justify-content:center;width:100%';
-      buttonGroup.parentNode.insertBefore(container, buttonGroup.nextSibling);
+    if (!buttonContainer) {
+      buttonContainer = Object.assign(document.createElement('div'), { id: 'mangalib-tracker-container' });
+      buttonContainer.style.cssText = 'display:flex;justify-content:center;width:100%;';
+      
+      buttonGroup.parentNode.insertBefore(buttonContainer, buttonGroup.nextSibling);
     }
     
-    // Не очищаем контейнер, если там уже есть кнопка
-    if (container.querySelector('#mangalib-track-btn')) {
-      isCreatingButton = false;
-      return true;
+    if (!buttonContainer.querySelector('#mangalib-track-btn')) {
+      buttonContainer.innerHTML = '';
+      
+      const trackBtn = Object.assign(document.createElement('button'), { id: 'mangalib-track-btn', className: 'btn is-outline variant-light' });
+      trackBtn.style.cssText = `background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border:none;color:white;font-weight:500;padding:10px 20px;border-radius:5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:14px;transition:all 0.2s ease;width:100%;max-width:300px;min-width:180px`;
+      trackBtn.innerHTML = BTN_HTML.add;
+
+      const isTracked = await isMangaTracked(mangaId);
+      if (isTracked) { 
+        trackBtn.innerHTML = BTN_HTML.tracked; 
+        trackBtn.style.background = '#27ae60'; 
+      }
+      trackBtn.dataset.tracked = isTracked;
+      trackBtn.dataset.mangaId = mangaId;
+
+      trackBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentMangaId = parseMangaId();
+        const mangaTitle = queryFirst('h1, h1 span') || 'Тайтл';
+        trackBtn.dataset.tracked === 'true' ? removeMangaFromTracker(currentMangaId, mangaTitle) : saveMangaToStats();
+      };
+
+      trackBtn.onmouseenter = () => {
+        if (trackBtn.dataset.tracked === 'true') {
+          trackBtn.innerHTML = BTN_HTML.delete;
+          trackBtn.style.background = '#f38ba8';
+          trackBtn.style.transform = 'scale(1.02)';
+        } else { 
+          trackBtn.style.transform = 'scale(1.02)'; 
+          trackBtn.style.opacity = '0.9'; 
+        }
+      };
+
+      trackBtn.onmouseleave = () => {
+        if (trackBtn.dataset.tracked === 'true') {
+          trackBtn.innerHTML = BTN_HTML.tracked;
+          trackBtn.style.background = '#27ae60';
+        } else { 
+          trackBtn.style.transform = 'scale(1)'; 
+          trackBtn.style.opacity = '1'; 
+        }
+      };
+
+      buttonContainer.appendChild(trackBtn);
     }
     
-    const trackBtn = Object.assign(document.createElement('button'), { id: 'mangalib-track-btn', className: 'btn is-outline variant-light' });
-    trackBtn.style.cssText = `background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border:none;color:white;font-weight:500;padding:10px 20px;border-radius:30px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:14px;transition:all 0.2s ease;width:100%;max-width:300px;min-width:180px`;
-    trackBtn.innerHTML = BTN_HTML.add;
-
-    const isTracked = await isMangaTracked(mangaId);
-    if (isTracked) { trackBtn.innerHTML = BTN_HTML.tracked; trackBtn.style.background = '#27ae60'; }
-    trackBtn.dataset.tracked = isTracked;
-    trackBtn.dataset.mangaId = mangaId;
-
-    trackBtn.onclick = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const currentMangaId = parseMangaId();
-      const mangaTitle = queryFirst('h1, h1 span') || 'Тайтл';
-      trackBtn.dataset.tracked === 'true' ? removeMangaFromTracker(currentMangaId, mangaTitle) : saveMangaToStats();
-    };
-
-    trackBtn.onmouseenter = () => {
-      if (trackBtn.dataset.tracked === 'true') {
-        trackBtn.innerHTML = BTN_HTML.delete;
-        trackBtn.style.background = '#f38ba8';
-        trackBtn.style.transform = 'scale(1.02)';
-      } else { trackBtn.style.transform = 'scale(1.02)'; trackBtn.style.opacity = '0.9'; }
-    };
-
-    trackBtn.onmouseleave = () => {
-      if (trackBtn.dataset.tracked === 'true') {
-        trackBtn.innerHTML = BTN_HTML.tracked;
-        trackBtn.style.background = '#27ae60';
-      } else { trackBtn.style.transform = 'scale(1)'; trackBtn.style.opacity = '1'; }
-    };
-
-    container.appendChild(trackBtn);
     return true;
   } finally {
     isCreatingButton = false;
@@ -622,11 +696,14 @@ let observer = null;
 function startMutationObserver() {
   observer?.disconnect();
   observer = new MutationObserver(async () => {
-    // Проверяем, есть ли уже кнопка, перед созданием новой
     if (document.querySelector('#mangalib-track-btn')) return;
     
     const container = document.querySelector('#mangalib-tracker-container');
-    const buttonGroup = document.querySelector('.btns._group');
+    
+    let buttonGroup = document.querySelector('.btns._group');
+    if (!buttonGroup) {
+      buttonGroup = document.querySelector('.btn.is-outline.variant-light');
+    }
     
     if (container && buttonGroup) await createButton();
     else if (!container && buttonGroup) await createButton();
@@ -643,11 +720,25 @@ async function addTrackButton() {
     const url = location.href;
     if (url !== lastUrl && url.match(/\/ru\/manga\/\d+/)) {
       lastUrl = url;
-      setTimeout(async () => { 
-        // При смене URL ждём загрузки страницы и обновляем кнопку
-        if (!document.querySelector('#mangalib-track-btn')) await createButton(); 
-        await addChangeIndicator(); 
-      }, 1000);
+      
+      // Мгновенно обновляем кнопку и селектор при смене URL
+      setTimeout(async () => {
+        // Обновляем кнопку
+        const existingBtn = document.querySelector('#mangalib-track-btn');
+        if (existingBtn) {
+          // Обновляем состояние кнопки
+          const mangaId = parseMangaId();
+          if (mangaId) {
+            const isTracked = await isMangaTracked(mangaId);
+            updateTrackButtonState(mangaId);
+          }
+        } else {
+          await createButton();
+        }
+        
+        // Мгновенно обновляем селектор даты
+        await refreshDateSelector();
+      }, 100);
     }
   });
   urlObserver.observe(document, { subtree: true, childList: true });
