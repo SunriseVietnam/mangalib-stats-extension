@@ -223,7 +223,7 @@ function updateRatingWithChanges(current, previous) {
 
 function updateProgressBarsWithChanges(current, previous) {
   if (!previous) return;
-  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change').forEach(el => el.remove());
+  clearAllIndicators();
   updateRatingWithChanges(current, previous);
 
   const totalContainer = document.querySelector('[data-stats="bookmarks"] .section-title');
@@ -253,43 +253,156 @@ function updateProgressBarsWithChanges(current, previous) {
   }
 }
 
-async function populateDateSelector(mangaId, currentStats) {
+async function fetchFreshDataViaApi(mangaId, mangaUrl) {
+  
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ 
+      type: 'UPDATE_SINGLE_MANGA', 
+      mangaId: mangaId, 
+      mangaUrl: mangaUrl 
+    }, (response) => {
+      if (response && response.success && response.data) {
+        resolve(response.data);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function populateDateSelector(mangaId, currentStats, mangaUrl) {
   const history = await getMangaHistory(mangaId);
   const dateInput = document.getElementById('mangalib-compare-date');
   const infoDiv = document.getElementById('mangalib-date-info');
-
-  const sortedDates = history.map(h => h.date).sort();
+  
+  if (!dateInput) return;
+  
   const today = new Date().toISOString().split('T')[0];
+  const hasTodayData = history.some(h => h.date === today);
+  
+  if (!hasTodayData && mangaUrl) {
+    if (infoDiv) infoDiv.innerHTML = '⏳ Обновление данных...';
+    
+    const freshData = await fetchFreshDataViaApi(mangaId, mangaUrl);
+    if (freshData) {
+      Object.assign(currentStats, freshData);
+      if (infoDiv) infoDiv.innerHTML = '✅ Данные обновлены';
+      setTimeout(() => {
+        if (infoDiv && infoDiv.innerHTML === '✅ Данные обновлены') infoDiv.innerHTML = '';
+      }, 2000);
+    } else {
+      if (infoDiv) infoDiv.innerHTML = '⚠️ Не удалось обновить данные';
+      setTimeout(() => {
+        if (infoDiv && infoDiv.innerHTML === '⚠️ Не удалось обновить данные') infoDiv.innerHTML = '';
+      }, 3000);
+    }
+  }
+  
+  const updatedHistory = await getMangaHistory(mangaId);
+  const sortedDates = updatedHistory.map(h => h.date).sort();
   const availableDates = sortedDates.filter(d => d !== today);
   const lastDate = availableDates.length ? availableDates[availableDates.length - 1] : sortedDates[0];
-
-  if (dateInput) {
-    dateInput.disabled = false;
+  
+  dateInput.disabled = false;
+  if (sortedDates.length) {
     dateInput.min = sortedDates[0];
     dateInput.max = sortedDates[sortedDates.length - 1];
-    dateInput.value = lastDate;
-    dateInput.onchange = () => {
-      const selected = dateInput.value;
-      if (selected) updateProgressBarsWithChanges(currentStats, history.find(h => h.date === selected));
-      else document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change').forEach(el => el.remove());
-    };
-    const previousStats = history.find(h => h.date === lastDate);
-    if (previousStats) updateProgressBarsWithChanges(currentStats, previousStats);
   }
+  dateInput.value = lastDate || '';
+  
+  dateInput.onchange = () => {
+    const selected = dateInput.value;
+    if (selected && updatedHistory.length) {
+      const previousStats = updatedHistory.find(h => h.date === selected);
+      if (previousStats) {
+        updateProgressBarsWithChanges(currentStats, previousStats);
+        if (infoDiv) {
+          const dateObj = new Date(selected);
+          infoDiv.innerHTML = `📊 Изменения с ${dateObj.toLocaleDateString('ru-RU')}`;
+        }
+      }
+    } else {
+      clearAllIndicators();
+      if (infoDiv) infoDiv.innerHTML = '';
+    }
+  };
+  
+  if (lastDate) {
+    const previousStats = updatedHistory.find(h => h.date === lastDate);
+    if (previousStats) {
+      updateProgressBarsWithChanges(currentStats, previousStats);
+      if (infoDiv) {
+        const dateObj = new Date(lastDate);
+        infoDiv.innerHTML = `📊 Изменения с ${dateObj.toLocaleDateString('ru-RU')}`;
+      }
+    }
+  }
+}
+
+async function addChangeIndicator() {
+  const mangaId = parseMangaId();
+  const mangaUrl = window.location.href;
+  if (!mangaId) return;
+  
+  const isTracked = await isMangaTracked(mangaId);
+  
+  if (!isTracked) {
+    return;
+  }
+  
+  if (document.querySelector('#mangalib-date-selector')) return;
+  
+  const checkInterval = setInterval(async () => {
+    const bookmarksBlock = document.querySelector('[data-stats="bookmarks"]');
+    if (!bookmarksBlock) return;
+    
+    clearInterval(checkInterval);
+    
+    let currentStats = collectStats();
+    if (!currentStats) return;
+    
+    let mediaContent = document.querySelector('.media-content.paper');
+    if (!mediaContent) {
+      mediaContent = document.querySelector('.media-content');
+    }
+    
+    if (!mediaContent) return;
+    
+    const dateSelector = createDateSelector();
+    mediaContent.appendChild(dateSelector);
+    
+    await populateDateSelector(mangaId, currentStats, mangaUrl);
+  }, 2000);
+  
+  setTimeout(() => clearInterval(checkInterval), 10000);
 }
 
 async function refreshDateSelector() {
   const mangaId = parseMangaId();
+  const mangaUrl = window.location.href;
   if (!mangaId) return;
   const isTracked = await isMangaTracked(mangaId);
   const dateSelector = document.querySelector('#mangalib-date-selector');
-
-  if (!isTracked) { dateSelector?.remove(); return; }
-  if (!dateSelector) await addChangeIndicator();
-  else {
-    const stats = collectStats();
-    if (stats) await populateDateSelector(mangaId, stats);
+  
+  if (!isTracked) {
+    if (dateSelector) {
+      dateSelector.remove();
+    }
+    return;
   }
+  
+  if (!dateSelector) {
+    await addChangeIndicator();
+  } else {
+    const currentStats = collectStats();
+    if (currentStats) {
+      await populateDateSelector(mangaId, currentStats, mangaUrl);
+    }
+  }
+}
+
+function clearAllIndicators() {
+  document.querySelectorAll('.mangalib-change-indicator, .mangalib-category-change, .mangalib-rating-change, .mangalib-votes-change').forEach(el => el.remove());
 }
 
 function createDateSelector() {
