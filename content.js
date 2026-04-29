@@ -326,87 +326,23 @@ function updateProgressBarsWithChanges(current, previous) {
     const previousCount = previous.listStats?.[key] || 0;
     const change = currentCount - previousCount;
     
-    const progressBar = row.querySelector('.progress__bar');
-    if (!progressBar) continue;
-    
-    // Получаем текущую ширину в процентах
-    const currentPercent = parseFloat(progressBar.style.width) || 0;
-    
-    // Удаляем старый индикатор
-    const oldChangeBar = progressBar.parentElement?.querySelector('.mangalib-progress-change');
-    if (oldChangeBar) oldChangeBar.remove();
-    
-    if (change !== 0) {
-      // Рассчитываем изменение в процентах
-      const total = current.totalInLists;
-      const changePercent = (Math.abs(change) / total) * 100;
-      
-      if (changePercent > 0.1) {
-        // Создаём полосу изменений
-        const changeBar = document.createElement('div');
-        changeBar.className = 'mangalib-progress-change';
-        
-        if (change > 0) {
-          // При росте: добавляем зелёную полосу справа
-          changeBar.style.cssText = `
-            position: absolute;
-            top: 0;
-            right: 0;
-            height: 100%;
-            width: ${changePercent}%;
-            background: rgba(166, 227, 161, 0.7);
-            border-radius: 0 3px 3px 0;
-            z-index: 1;
-          `;
-        } else {
-          // При падении: добавляем красную полосу (показывает потерю)
-          changeBar.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: ${currentPercent}%;
-            height: 100%;
-            width: ${changePercent}%;
-            background: rgba(243, 139, 168, 0.7);
-            border-radius: 0 3px 3px 0;
-            z-index: 1;
-          `;
-        }
-        
-        progressBar.parentElement.style.position = 'relative';
-        progressBar.style.position = 'relative';
-        progressBar.style.zIndex = '2';
-        progressBar.parentElement.appendChild(changeBar);
+    // Текстовый индикатор
+    const countEl = row.querySelector('.agt_sm');
+    if (countEl) {
+      let changeSpan = row.querySelector(`.mangalib-category-change[data-category="${key}"]`);
+      if (!changeSpan) {
+        changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-category-change' });
+        changeSpan.setAttribute('data-category', key);
+        countEl.after(changeSpan);
       }
-      
-      // Текстовый индикатор
-      const countEl = row.querySelector('.agt_sm');
-      if (countEl) {
-        let changeSpan = row.querySelector(`.mangalib-category-change[data-category="${key}"]`);
-        if (!changeSpan) {
-          changeSpan = Object.assign(document.createElement('span'), { className: 'mangalib-category-change' });
-          changeSpan.setAttribute('data-category', key);
-          countEl.after(changeSpan);
-        }
-        changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
-        changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
-      }
+      changeSpan.textContent = `${change > 0 ? ' (+' : ' ('}${change.toLocaleString()})`;
+      changeSpan.style.cssText = `margin-left:4px;font-size:10px;color:${change > 0 ? '#a6e3a1' : '#f38ba8'}`;
     }
   }
 }
 
 function clearProgressBars() {
   document.querySelectorAll('.mangalib-progress-change').forEach(el => el.remove());
-  
-  // Восстанавливаем оригинальные прогресс-бары
-  const progressBars = document.querySelectorAll('[data-stats="bookmarks"] .progress__bar');
-  progressBars.forEach(bar => {
-    const originalWidth = bar.style.width;
-    bar.style.width = originalWidth;
-    bar.style.position = '';
-    if (bar.parentElement) {
-      bar.parentElement.style.position = '';
-    }
-  });
 }
 
 async function fetchFreshDataViaApi(mangaId, mangaUrl) {

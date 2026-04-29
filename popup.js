@@ -1,4 +1,4 @@
-// popup.js - только отображение данных, без обновлений
+// popup.js - управление отображением данных + комментарии
 
 let allMangas = [];
 let manga1History = [];
@@ -6,6 +6,7 @@ let manga2History = [];
 let manga1Data = null;
 let manga2Data = null;
 let currentSearch = '';
+let lastCommentCheckDate = localStorage.getItem('mangalib_lastCommentCheck') || new Date().toISOString();
 
 async function loadData() {
   return new Promise((resolve) => {
@@ -87,6 +88,7 @@ function renderMangaList() {
       <div class="manga-card-stats">
         <span>📖 ${m.chapters || 0} глав</span>
         <span>🗳️ ${formatNumber(m.votesCount)} оценок</span>
+        <span>👁️ ${formatNumber(m.viewsCount || 0)} просмотров</span>
         <span>📊 ${formatNumber(m.totalInLists)} в списках</span>
       </div>
       <div class="manga-card-lists">
@@ -202,6 +204,7 @@ async function drawChart() {
     if (metric === 'averageRating') return h?.averageRating ?? null;
     if (metric === 'votesCount') return h?.votesCount ?? null;
     if (metric === 'totalInLists') return h?.totalInLists ?? null;
+    if (metric === 'viewsCount') return h?.viewsCount ?? null;
     return h?.listStats?.[metric] ?? null;
   };
   
@@ -588,6 +591,187 @@ function initEvents() {
   
   setupMangaSearch('searchManga1', 'mangaList1', true);
   setupMangaSearch('searchManga2', 'mangaList2', false);
+  setupCommentsMangaSearch();
+  setupCommentsControls();
+}
+
+// ========== КОММЕНТАРИИ ==========
+let selectedCommentsManga = null;
+
+function setupCommentsMangaSearch() {
+  const input = document.getElementById('searchCommentsManga');
+  const list = document.getElementById('commentsMangaList');
+  if (!input || !list) return;
+  
+  input.addEventListener('input', (e) => {
+    const search = e.target.value.toLowerCase();
+    const filtered = allMangas.filter(m => m.title.toLowerCase().includes(search)).slice(0, 8);
+    
+    list.innerHTML = filtered.map(m => `
+      <div class="manga-select-item" data-id="${m.id}" data-title="${m.title}" data-info='${JSON.stringify(m)}'>
+        <strong>${m.title}</strong>
+        <span class="manga-select-stats">⭐ ${m.averageRating || '—'}</span>
+      </div>
+    `).join('');
+    
+    list.querySelectorAll('.manga-select-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const { title, info } = item.dataset;
+        selectedCommentsManga = JSON.parse(info);
+        input.value = title;
+        list.innerHTML = '';
+        loadChaptersForManga(selectedCommentsManga.id);
+      });
+    });
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !list.contains(e.target)) {
+      list.innerHTML = '';
+    }
+  });
+}
+
+async function loadChaptersForManga(mangaId) {
+  const chapterSelect = document.getElementById('lastChapterSelect');
+  if (!chapterSelect) return;
+  
+  chapterSelect.innerHTML = '<option value="">Загрузка глав...</option>';
+  
+  try {
+    const manga = allMangas.find(m => m.id === mangaId);
+    if (!manga) return;
+    
+    const slug = manga.url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1];
+    if (!slug) return;
+    
+    const response = await fetch(`https://api.cdnlibs.org/api/manga/${slug}/chapters`, {
+      headers: { 'Site-Id': '1', 'Accept': 'application/json' }
+    });
+    
+    if (!response.ok) throw new Error('API error');
+    const data = await response.json();
+    
+    const chapters = data.data?.items || [];
+    chapterSelect.innerHTML = '<option value="">Выберите главу</option>' + 
+      chapters.slice(-20).reverse().map(ch => 
+        `<option value="${ch.number}" data-volume="${ch.volume || 1}">Гл. ${ch.number} (том ${ch.volume || 1})</option>`
+      ).join('');
+  } catch (e) {
+    chapterSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+  }
+}
+
+function setupCommentsControls() {
+  const sourceTypeSelect = document.getElementById('commentSourceType');
+  const chapterSelect = document.getElementById('lastChapterSelect');
+  
+  if (sourceTypeSelect && chapterSelect) {
+    sourceTypeSelect.addEventListener('change', () => {
+      chapterSelect.style.display = sourceTypeSelect.value === 'chapter' ? 'block' : 'none';
+    });
+  }
+  
+  document.getElementById('loadCommentsBtn')?.addEventListener('click', loadComments);
+  document.getElementById('markCommentsReadBtn')?.addEventListener('click', markCommentsAsRead);
+}
+
+async function loadComments() {
+  if (!selectedCommentsManga) {
+    alert('Выберите тайтл');
+    return;
+  }
+  
+  const sourceType = document.getElementById('commentSourceType')?.value || 'manga';
+  const chapterSelect = document.getElementById('lastChapterSelect');
+  const commentsList = document.getElementById('commentsList');
+  
+  commentsList.innerHTML = '<div class="empty">Загрузка комментариев...</div>';
+  
+  try {
+    let postId = selectedCommentsManga.id;
+    let postType = 'manga';
+    let postPage = null;
+    
+    if (sourceType === 'chapter') {
+      const chapterNumber = chapterSelect?.value;
+      const volume = chapterSelect?.selectedOptions[0]?.dataset?.volume || 1;
+      
+      if (!chapterNumber) {
+        commentsList.innerHTML = '<div class="empty">Выберите главу</div>';
+        return;
+      }
+      
+      const slug = selectedCommentsManga.url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1];
+      const chapterResponse = await fetch(
+        `https://api.cdnlibs.org/api/manga/${slug}/chapter?number=${chapterNumber}&volume=${volume}`,
+        { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
+      );
+      
+      if (!chapterResponse.ok) throw new Error('API error');
+      const chapterData = await chapterResponse.json();
+      
+      const chapterId = chapterData.data?.id;
+      if (!chapterId) {
+        commentsList.innerHTML = '<div class="empty">Не удалось получить ID главы</div>';
+        return;
+      }
+      
+      postId = chapterId;
+      postType = 'chapter';
+    }
+    
+    const commentsResponse = await fetch(
+      `https://api.cdnlibs.org/api/comments?page=1&post_id=${postId}&post_type=${postType}${postPage ? `&post_page=${postPage}` : ''}&sort_by=id&sort_type=desc`,
+      { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
+    );
+    
+    if (!commentsResponse.ok) throw new Error('API error');
+    const commentsData = await commentsResponse.json();
+    
+    const comments = commentsData.data?.items || [];
+    const checkDate = new Date(lastCommentCheckDate);
+    
+    if (!comments.length) {
+      commentsList.innerHTML = '<div class="empty">Нет комментариев</div>';
+      return;
+    }
+    
+    commentsList.innerHTML = comments.map(comment => {
+      const commentDate = new Date(comment.created_at);
+      const isNew = commentDate > checkDate;
+      const authorUrl = `https://mangalib.me/ru/user/${comment.user?.id || comment.author_id || 0}`;
+      const commentUrl = `https://mangalib.me/ru/manga/${selectedCommentsManga.id}?section=comments#comment-${comment.id}`;
+      
+      return `
+        <div class="comment-item ${isNew ? 'new' : ''}">
+          <div class="comment-header">
+            <a href="${authorUrl}" target="_blank" class="comment-author">@${comment.user?.username || comment.author || 'Аноним'}</a>
+            <span class="comment-date">${commentDate.toLocaleDateString('ru-RU')} ${commentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+          <div class="comment-text">${escapeHtml(comment.text || comment.content || '')}</div>
+          <a href="${commentUrl}" target="_blank" class="comment-link">📍 Перейти к комментарию</a>
+          ${isNew ? '<span class="comment-new-badge">НОВЫЙ</span>' : ''}
+        </div>
+      `;
+    }).join('');
+    
+  } catch (e) {
+    commentsList.innerHTML = `<div class="empty">Ошибка: ${e.message}</div>`;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function markCommentsAsRead() {
+  lastCommentCheckDate = new Date().toISOString();
+  localStorage.setItem('mangalib_lastCommentCheck', lastCommentCheckDate);
+  alert('✅ Комментарии отмечены как прочитанные');
+  if (selectedCommentsManga) loadComments();
 }
 
 async function addMangasByUrls(rawInput) {
@@ -687,46 +871,33 @@ function updateRecentlyAdded() {
 
 async function updateAllMangas() {
   const updateBtn = document.getElementById('updateAllBtn');
-  const progressSpan = document.getElementById('updateProgress');
   
   if (!updateBtn || !allMangas.length) return;
   
   updateBtn.disabled = true;
-  updateBtn.textContent = '⏳ Обновление...';
-  progressSpan.style.display = 'inline';
+  updateBtn.textContent = '⏳ Обновление в фоне...';
   
-  let updated = 0, failed = 0;
-  
-  for (let i = 0; i < allMangas.length; i++) {
-    const manga = allMangas[i];
-    progressSpan.textContent = `[${i+1}/${allMangas.length}] ${manga.title.substring(0, 35)}...`;
-    
-    try {
-      const response = await new Promise(resolve => {
-        chrome.runtime.sendMessage({ type: 'UPDATE_SINGLE_MANGA', mangaId: manga.id, mangaUrl: manga.url }, resolve);
+  try {
+    await new Promise(resolve => {
+      chrome.runtime.sendMessage({ type: 'TRIGGER_UPDATE_ALL' }, (response) => {
+        resolve(response);
       });
-      
-      if (response?.success) updated++;
-      else failed++;
-    } catch(e) {
-      failed++;
-    }
+    });
     
-    await new Promise(r => setTimeout(r, 1500));
+    // Ждем немного после завершения фонового обновления
+    await new Promise(r => setTimeout(r, 2000));
+    
+    await loadData();
+    updateOverview();
+    renderMangaList();
+    
+    alert('✅ Обновление завершено!');
+  } catch (e) {
+    alert('❌ Ошибка обновления: ' + e.message);
+  } finally {
+    updateBtn.disabled = false;
+    updateBtn.textContent = '🔄 Обновить все тайтлы';
   }
-  
-  await loadData();
-  updateOverview();
-  renderMangaList();
-  
-  progressSpan.textContent = `✅ Готово: ${updated} обновлено, ${failed} ошибок`;
-  updateBtn.disabled = false;
-  updateBtn.textContent = '🔄 Обновить все тайтлы';
-  
-  setTimeout(() => {
-    progressSpan.style.display = 'none';
-    progressSpan.textContent = '';
-  }, 5000);
 }
 
 async function init() {

@@ -74,11 +74,30 @@ async function fetchAllMangaData(mangaUrl) {
   const [info, stats] = await Promise.all([fetchMangaInfo(slug), fetchMangaStats(slug)]);
   if (!info) return null;
   
+  // Получаем просмотры из отдельного запроса
+  let viewsCount = 0;
+  try {
+    const viewsResponse = await fetch(`${API_BASE}/api/manga/${slug}?fields[]=views`, { method: 'GET', headers: getApiHeaders() });
+    if (viewsResponse.ok) {
+      const viewsData = await viewsResponse.json();
+      viewsCount = viewsData.data?.views?.total || 0;
+    }
+  } catch (e) {
+    console.error('Ошибка получения просмотров:', e);
+  }
+  
   const listStats = { reading: 0, planned: 0, dropped: 0, completed: 0, favorite: 0, other: 0 };
   if (stats?.bookmarks?.stats) {
     for (const item of stats.bookmarks.stats) {
       const map = { 'Читаю': 'reading', 'В планах': 'planned', 'Брошено': 'dropped', 'Прочитано': 'completed', 'Любимые': 'favorite', 'Другое': 'other' };
       if (map[item.label]) listStats[map[item.label]] = item.value;
+    }
+  }
+  
+  const ratingStats = {};
+  if (stats?.rating?.stats) {
+    for (const item of stats.rating.stats) {
+      ratingStats[item.label] = item.value;
     }
   }
   
@@ -92,7 +111,9 @@ async function fetchAllMangaData(mangaUrl) {
     averageRating: info.rating.average,
     votesCount: totalVotes,
     totalInLists: stats?.bookmarks?.count || 0,
+    viewsCount,
     listStats,
+    ratingStats,
     status: info.status?.label || 'неизвестен',
     genres: info.genres?.map(g => g.name) || [],
     author: info.authors?.[0]?.name || 'неизвестен',
@@ -147,14 +168,18 @@ async function saveMangaStats(mangaData) {
           averageRating: mangaData.averageRating,
           votesCount: mangaData.votesCount,
           totalInLists: mangaData.totalInLists,
-          listStats: { ...mangaData.listStats }
+          viewsCount: mangaData.viewsCount,
+          listStats: { ...mangaData.listStats },
+          ratingStats: { ...mangaData.ratingStats }
         });
       } else {
         Object.assign(lastHistoryEntry, {
           averageRating: mangaData.averageRating,
           votesCount: mangaData.votesCount,
           totalInLists: mangaData.totalInLists,
-          listStats: { ...mangaData.listStats }
+          viewsCount: mangaData.viewsCount,
+          listStats: { ...mangaData.listStats },
+          ratingStats: { ...mangaData.ratingStats }
         });
       }
       
@@ -173,7 +198,9 @@ async function saveMangaStats(mangaData) {
           averageRating: mangaData.averageRating,
           votesCount: mangaData.votesCount,
           totalInLists: mangaData.totalInLists,
-          listStats: { ...mangaData.listStats }
+          viewsCount: mangaData.viewsCount,
+          listStats: { ...mangaData.listStats },
+          ratingStats: { ...mangaData.ratingStats }
         }],
         firstVisited: mangaData.lastVisited,
         lastUpdated: mangaData.lastVisited,
@@ -230,7 +257,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     DELETE_MANGA: () => deleteManga(message.mangaId).then(mangas => ({ success: true, count: mangas.length })),
     ADD_MANGA_BY_URL: () => addMangaByUrl(message.url).then(data => data ? { success: true, data } : { success: false, error: 'Не удалось получить данные' }),
     UPDATE_SINGLE_MANGA: () => updateMangaViaApi(message.mangaUrl).then(mangaData => mangaData ? saveMangaStats(mangaData).then(() => ({ success: true, data: mangaData })) : { success: false, error: 'Не удалось обновить' }),
-    CLEAR_ALL_STATS: () => clearAllStats().then(() => ({ success: true }))
+    CLEAR_ALL_STATS: () => clearAllStats().then(() => ({ success: true })),
+    TRIGGER_UPDATE_ALL: () => updateAllMangasInBackground().then(() => ({ success: true }))
   };
   
   const handler = handlers[message.type];
@@ -240,5 +268,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return false;
 });
+
+// Обновление всех тайтлов в фоне (без UI)
+async function updateAllMangasInBackground() {
+  const mangas = await getAllStats();
+  for (let i = 0; i < mangas.length; i++) {
+    const manga = mangas[i];
+    try {
+      await updateMangaViaApi(manga.url);
+      await new Promise(r => setTimeout(r, 1500)); // Задержка между запросами
+    } catch (e) {
+      console.error(`Ошибка обновления ${manga.title}:`, e);
+    }
+  }
+}
 
 initStorage();

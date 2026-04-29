@@ -17,6 +17,7 @@
       <button class="tab-btn" data-tab="list">📖 Список</button>
       <button class="tab-btn" data-tab="add">➕ Добавить</button>
       <button class="tab-btn" data-tab="history">📈 Динамика</button>
+      <button class="tab-btn" data-tab="comments">💬 Комментарии</button>
       <button class="tab-btn" data-tab="export">💾 Экспорт</button>
     </div>
 
@@ -37,7 +38,6 @@
 <div id="tab-list" class="tab-content">
   <div class="update-all-btn-container">
     <button id="updateAllBtn" class="btn-update-all">🔄 Обновить все тайтлы</button>
-    <span id="updateProgress" class="update-progress"></span>
   </div>
   <div class="search-box">
     <input type="text" id="searchInput" placeholder="🔍 Поиск по названию..." class="search-input">
@@ -89,6 +89,7 @@
             <option value="averageRating">⭐ Оценка</option>
             <option value="votesCount">📊 Количество оценок</option>
             <option value="totalInLists">📚 Всего в списках</option>
+            <option value="viewsCount">👁️ Просмотры</option>
             <option value="reading">📖 Читаю</option>
             <option value="planned">📅 В планах</option>
             <option value="completed">✅ Прочитано</option>
@@ -115,6 +116,37 @@
           <div id="selectedManga1Info" class="selected-info">Тайтл 1 не выбран</div>
           <div id="selectedManga2Info" class="selected-info">Тайтл 2 не выбран</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Вкладка Комментарии -->
+    <div id="tab-comments" class="tab-content">
+      <div class="section">
+        <h3>💬 Новые комментарии</h3>
+        <p style="font-size: 12px; color: #a6adc8; margin-bottom: 12px;">Показываются комментарии с даты последнего просмотра</p>
+        
+        <div class="comments-controls">
+          <div class="manga-select-wrapper">
+            <label>Выберите тайтл</label>
+            <input type="text" id="searchCommentsManga" placeholder="Поиск тайтла..." class="search-input">
+            <div id="commentsMangaList" class="manga-select-list"></div>
+          </div>
+          
+          <div class="comments-filters">
+            <select id="commentSourceType" class="chart-select">
+              <option value="manga">Комментарии к тайтлу</option>
+              <option value="chapter">Комментарии к главе</option>
+            </select>
+            <select id="lastChapterSelect" class="chart-select" style="display: none;">
+              <option value="">Выберите главу</option>
+            </select>
+          </div>
+          
+          <button id="loadCommentsBtn" class="btn-add" style="margin-top: 12px;">🔄 Загрузить комментарии</button>
+          <button id="markCommentsReadBtn" class="btn-refresh" style="margin-top: 8px;">✅ Отметить как прочитанные</button>
+        </div>
+        
+        <div id="commentsList" class="comments-list" style="margin-top: 16px; max-height: 400px; overflow-y: auto;"></div>
       </div>
     </div>
 
