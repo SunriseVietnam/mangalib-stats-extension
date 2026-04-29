@@ -79,7 +79,33 @@ function renderMangaList() {
     return;
   }
   
-  container.innerHTML = filtered.map(m => `
+  container.innerHTML = filtered.map(m => {
+    // Вычисляем разницу с предыдущей записью
+    const history = m.history || [];
+    const prevStats = history.length > 1 ? history[history.length - 2] : null;
+    const currStats = history.length > 0 ? history[history.length - 1] : null;
+    
+    const calcDiff = (curr, prev, key) => {
+      if (!curr || !prev) return 0;
+      const c = curr[key] ?? 0;
+      const p = prev[key] ?? 0;
+      return c - p;
+    };
+    
+    const diffTotal = calcDiff(currStats, prevStats, 'totalInLists');
+    const diffReading = calcDiff(currStats?.listStats, prevStats?.listStats, 'reading');
+    const diffPlanned = calcDiff(currStats?.listStats, prevStats?.listStats, 'planned');
+    const diffCompleted = calcDiff(currStats?.listStats, prevStats?.listStats, 'completed');
+    const diffFavorite = calcDiff(currStats?.listStats, prevStats?.listStats, 'favorite');
+    const diffDropped = calcDiff(currStats?.listStats, prevStats?.listStats, 'dropped');
+    const diffOther = calcDiff(currStats?.listStats, prevStats?.listStats, 'other');
+    
+    const formatDiff = (diff) => {
+      if (diff === 0) return '';
+      return diff > 0 ? `↑ +${formatNumber(diff)}` : `↓ ${formatNumber(diff)}`;
+    };
+    
+    return `
     <div class="manga-card">
       <div class="manga-card-header">
         <a href="${m.url}" target="_blank" class="manga-title">${m.title}</a>
@@ -89,15 +115,15 @@ function renderMangaList() {
         <span>📖 ${m.chapters || 0} глав</span>
         <span>🗳️ ${formatNumber(m.votesCount)} оценок</span>
         <span>👁️ ${formatNumber(m.viewsCount || 0)} просмотров</span>
-        <span>📊 ${formatNumber(m.totalInLists)} в списках</span>
+        <span>📊 ${formatNumber(m.totalInLists)} в списках ${formatDiff(diffTotal)}</span>
       </div>
       <div class="manga-card-lists">
-        <span class="list-badge">📖 Читаю: ${formatNumber(m.listStats?.reading)}</span>
-        <span class="list-badge">📅 В планах: ${formatNumber(m.listStats?.planned)}</span>
-        <span class="list-badge">✅ Прочитано: ${formatNumber(m.listStats?.completed)}</span>
-        <span class="list-badge">❤️ Любимые: ${formatNumber(m.listStats?.favorite)}</span>
-        <span class="list-badge">❌ Брошено: ${formatNumber(m.listStats?.dropped)}</span>
-        <span class="list-badge">📌 Другое: ${formatNumber(m.listStats?.other)}</span>
+        <span class="list-badge">📖 Читаю: ${formatNumber(m.listStats?.reading)} ${formatDiff(diffReading)}</span>
+        <span class="list-badge">📅 В планах: ${formatNumber(m.listStats?.planned)} ${formatDiff(diffPlanned)}</span>
+        <span class="list-badge">✅ Прочитано: ${formatNumber(m.listStats?.completed)} ${formatDiff(diffCompleted)}</span>
+        <span class="list-badge">❤️ Любимые: ${formatNumber(m.listStats?.favorite)} ${formatDiff(diffFavorite)}</span>
+        <span class="list-badge">❌ Брошено: ${formatNumber(m.listStats?.dropped)} ${formatDiff(diffDropped)}</span>
+        <span class="list-badge">📌 Другое: ${formatNumber(m.listStats?.other)} ${formatDiff(diffOther)}</span>
       </div>
       <div class="manga-card-footer">
         <span class="manga-status">${m.status || '—'}</span>
@@ -106,7 +132,8 @@ function renderMangaList() {
         <button class="btn-delete" data-id="${m.id}" data-title="${m.title.replace(/"/g, '&quot;')}">🗑 Удалить</button>
       </div>
     </div>
-  `).join('');
+    `;
+  }).join('');
   
   document.querySelectorAll('.btn-history').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -652,7 +679,13 @@ async function loadChaptersForManga(mangaId) {
     if (!response.ok) throw new Error('API error');
     const data = await response.json();
     
-    const chapters = data.data?.items || [];
+    const chapters = data.data || [];
+    
+    if (!chapters.length) {
+      chapterSelect.innerHTML = '<option value="">Нет глав</option>';
+      return;
+    }
+    
     chapterSelect.innerHTML = '<option value="">Выберите главу</option>' + 
       chapters.slice(-20).reverse().map(ch => 
         `<option value="${ch.number}" data-volume="${ch.volume || 1}">Гл. ${ch.number} (том ${ch.volume || 1})</option>`
@@ -681,71 +714,99 @@ async function loadComments() {
     alert('Выберите тайтл');
     return;
   }
-  
-  const sourceType = document.getElementById('commentSourceType')?.value || 'manga';
-  const chapterSelect = document.getElementById('lastChapterSelect');
+
   const commentsList = document.getElementById('commentsList');
-  
   commentsList.innerHTML = '<div class="empty">Загрузка комментариев...</div>';
-  
+
   try {
-    let postId = selectedCommentsManga.id;
-    let postType = 'manga';
-    let postPage = null;
+    const slug = selectedCommentsManga.url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1];
+    if (!slug) throw new Error('Не удалось получить slug манги');
+
+    // Загружаем комментарии со всех глав и с самой манги
+    const allComments = [];
     
-    if (sourceType === 'chapter') {
-      const chapterNumber = chapterSelect?.value;
-      const volume = chapterSelect?.selectedOptions[0]?.dataset?.volume || 1;
-      
-      if (!chapterNumber) {
-        commentsList.innerHTML = '<div class="empty">Выберите главу</div>';
-        return;
-      }
-      
-      const slug = selectedCommentsManga.url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1];
-      const chapterResponse = await fetch(
-        `https://api.cdnlibs.org/api/manga/${slug}/chapter?number=${chapterNumber}&volume=${volume}`,
-        { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
-      );
-      
-      if (!chapterResponse.ok) throw new Error('API error');
-      const chapterData = await chapterResponse.json();
-      
-      const chapterId = chapterData.data?.id;
-      if (!chapterId) {
-        commentsList.innerHTML = '<div class="empty">Не удалось получить ID главы</div>';
-        return;
-      }
-      
-      postId = chapterId;
-      postType = 'chapter';
-    }
-    
-    const commentsResponse = await fetch(
-      `https://api.cdnlibs.org/api/comments?page=1&post_id=${postId}&post_type=${postType}${postPage ? `&post_page=${postPage}` : ''}&sort_by=id&sort_type=desc`,
+    // Сначала загружаем комментарии к манге
+    const mangaCommentsResponse = await fetch(
+      `https://api.cdnlibs.org/api/comments?page=1&post_id=${selectedCommentsManga.id}&post_type=manga&sort_by=id&sort_type=desc`,
       { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
     );
     
-    if (!commentsResponse.ok) throw new Error('API error');
-    const commentsData = await commentsResponse.json();
+    if (mangaCommentsResponse.ok) {
+      const mangaCommentsData = await mangaCommentsResponse.json();
+      const mangaComments = mangaCommentsData.data || [];
+      allComments.push(...mangaComments.map(c => ({ ...c, _source: 'manga' })));
+    }
     
-    const comments = commentsData.data?.items || [];
+    // Загружаем главы и комментарии к ним
+    const chaptersResponse = await fetch(
+      `https://api.cdnlibs.org/api/manga/${slug}/chapters`,
+      { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
+    );
+    
+    if (chaptersResponse.ok) {
+      const chaptersData = await chaptersResponse.json();
+      const chapters = chaptersData.data || [];
+      
+      // Загружаем комментарии для каждой главы (последние 50 глав чтобы не перегружать)
+      const recentChapters = chapters.slice(-50);
+      for (const chapter of recentChapters) {
+        const chapterId = chapter.id;
+        if (!chapterId) continue;
+        
+        try {
+          const chapterCommentsResponse = await fetch(
+            `https://api.cdnlibs.org/api/comments?page=1&post_id=${chapterId}&post_type=chapter&sort_by=id&sort_type=desc`,
+            { headers: { 'Site-Id': '1', 'Accept': 'application/json' } }
+          );
+          
+          if (chapterCommentsResponse.ok) {
+            const chapterCommentsData = await chapterCommentsResponse.json();
+            const chapterComments = chapterCommentsData.data || [];
+            allComments.push(...chapterComments.map(c => ({ 
+              ...c, 
+              _source: 'chapter',
+              _chapterNumber: chapter.number,
+              _chapterVolume: chapter.volume
+            })));
+          }
+        } catch (e) {
+          console.error(`Ошибка загрузки комментариев главы ${chapter.number}:`, e);
+        }
+        
+        // Небольшая задержка между запросами
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+    
+    // Сортируем все комментарии по ID (новые сверху)
+    allComments.sort((a, b) => b.id - a.id);
+    
     const checkDate = new Date(lastCommentCheckDate);
-    
-    if (!comments.length) {
+
+    if (!allComments.length) {
       commentsList.innerHTML = '<div class="empty">Нет комментариев</div>';
       return;
     }
-    
-    commentsList.innerHTML = comments.map(comment => {
+
+    commentsList.innerHTML = allComments.map(comment => {
       const commentDate = new Date(comment.created_at);
       const isNew = commentDate > checkDate;
       const authorUrl = `https://mangalib.me/ru/user/${comment.user?.id || comment.author_id || 0}`;
-      const commentUrl = `https://mangalib.me/ru/manga/${selectedCommentsManga.id}?section=comments#comment-${comment.id}`;
       
+      let commentUrl;
+      let sourceLabel;
+      if (comment._source === 'chapter') {
+        commentUrl = `https://mangalib.me/ru/manga/${slug}/read/volume/${comment._chapterVolume || 1}?page=1#comment-${comment.id}`;
+        sourceLabel = `Глава ${comment._chapterNumber}`;
+      } else {
+        commentUrl = `https://mangalib.me/ru/manga/${selectedCommentsManga.id}?section=comments#comment-${comment.id}`;
+        sourceLabel = 'Манга';
+      }
+
       return `
         <div class="comment-item ${isNew ? 'new' : ''}">
           <div class="comment-header">
+            <span class="comment-source">${sourceLabel}</span>
             <a href="${authorUrl}" target="_blank" class="comment-author">@${comment.user?.username || comment.author || 'Аноним'}</a>
             <span class="comment-date">${commentDate.toLocaleDateString('ru-RU')} ${commentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
           </div>
@@ -755,12 +816,12 @@ async function loadComments() {
         </div>
       `;
     }).join('');
-    
+
   } catch (e) {
+    console.error('Ошибка загрузки комментариев:', e);
     commentsList.innerHTML = `<div class="empty">Ошибка: ${e.message}</div>`;
   }
 }
-
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;

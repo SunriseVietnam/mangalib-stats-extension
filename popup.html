@@ -13,29 +13,14 @@
     </header>
 
     <div class="tabs">
-      <button class="tab-btn active" data-tab="overview">📊 Общая</button>
-      <button class="tab-btn" data-tab="list">📖 Список</button>
-      <button class="tab-btn" data-tab="add">➕ Добавить</button>
+      <button class="tab-btn active" data-tab="list">📖 Список</button>
       <button class="tab-btn" data-tab="history">📈 Динамика</button>
       <button class="tab-btn" data-tab="comments">💬 Комментарии</button>
       <button class="tab-btn" data-tab="export">💾 Экспорт</button>
     </div>
 
-    <!-- Вкладка Общая статистика -->
-    <div id="tab-overview" class="tab-content active">
-      <div class="section">
-        <h3>🏆 Топ-5 по оценкам</h3>
-        <div id="topRated" class="top-list"></div>
-      </div>
-
-      <div class="section">
-        <h3>🆕 Недавние тайтлы</h3>
-        <div id="recentList" class="recent-list"></div>
-      </div>
-    </div>
-
-<!-- Вкладка Список всех тайтлов -->
-<div id="tab-list" class="tab-content">
+    <!-- Вкладка Список всех тайтлов -->
+<div id="tab-list" class="tab-content active">
   <div class="update-all-btn-container">
     <button id="updateAllBtn" class="btn-update-all">🔄 Обновить все тайтлы</button>
   </div>
@@ -43,24 +28,6 @@
     <input type="text" id="searchInput" placeholder="🔍 Поиск по названию..." class="search-input">
   </div>
   <div id="mangaList" class="manga-list"></div>
-</div>
-
-<!-- Вкладка Добавление по ссылке -->
-<div id="tab-add" class="tab-content">
-  <div class="section">
-    <h3>➕ Добавить тайтлы по ссылкам</h3>
-    <p>Вставьте ссылки на тайтлы с MangaLib (можно несколько, разделяя запятой, пробелом или новой строкой):</p>
-    <div class="add-form">
-      <textarea id="mangaUrlsInput" rows="4" class="search-input textarea"></textarea>
-      <button id="addMangaBtn" class="btn-add">➕ Добавить все</button>
-    </div>
-    <div id="addProgress" class="add-progress"></div>
-  </div>
-
-  <div class="section">
-    <h3>📊 Недавно добавленные</h3>
-    <div id="recentlyAdded" class="recently-added-list"></div>
-  </div>
 </div>
 
     <!-- Вкладка Динамика -->
