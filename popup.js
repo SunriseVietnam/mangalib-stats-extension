@@ -99,22 +99,27 @@ function renderMangaList() {
     const diffFavorite = calcDiff(currStats?.listStats, prevStats?.listStats, 'favorite');
     const diffDropped = calcDiff(currStats?.listStats, prevStats?.listStats, 'dropped');
     const diffOther = calcDiff(currStats?.listStats, prevStats?.listStats, 'other');
-    
-    const formatDiff = (diff) => {
+    // Разница для рейтинга
+    const diffRating = calcDiff(currStats, prevStats, 'averageRating');
+    // Разница для просмотров
+    const diffViews = calcDiff(currStats, prevStats, 'viewsCount');
+
+    const formatDiff = (diff, isFloat = false) => {
       if (diff === 0) return '';
-      return diff > 0 ? `↑ +${formatNumber(diff)}` : `↓ ${formatNumber(diff)}`;
+      const formatted = isFloat ? diff.toFixed(2) : formatNumber(diff);
+      return diff > 0 ? `↑ +${formatted}` : `↓ ${formatted}`;
     };
     
     return `
     <div class="manga-card">
       <div class="manga-card-header">
         <a href="${m.url}" target="_blank" class="manga-title">${m.title}</a>
-        <span class="manga-rating">⭐ ${m.averageRating || '—'}</span>
+        <span class="manga-rating">⭐ ${m.averageRating || '—'} ${formatDiff(diffRating, true)}</span>
       </div>
       <div class="manga-card-stats">
         <span>📖 ${m.chapters || 0} глав</span>
         <span>🗳️ ${formatNumber(m.votesCount)} оценок</span>
-        <span>👁️ ${formatNumber(m.viewsCount || 0)} просмотров</span>
+        <span>👁️ ${formatNumber(m.viewsCount || 0)} просмотров ${formatDiff(diffViews)}</span>
         <span>📊 ${formatNumber(m.totalInLists)} в списках ${formatDiff(diffTotal)}</span>
       </div>
       <div class="manga-card-lists">
@@ -565,23 +570,6 @@ function initEvents() {
   const updateAllBtn = document.getElementById('updateAllBtn');
   if (updateAllBtn) updateAllBtn.addEventListener('click', updateAllMangas);
   
-  const addMangaBtn = document.getElementById('addMangaBtn');
-  if (addMangaBtn) {
-    addMangaBtn.addEventListener('click', () => {
-      const urlsInput = document.getElementById('mangaUrlsInput');
-      if (urlsInput) addMangasByUrls(urlsInput.value);
-    });
-  }
-  
-  const urlsInput = document.getElementById('mangaUrlsInput');
-  if (urlsInput) {
-    urlsInput.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        addMangasByUrls(e.target.value);
-      }
-    });
-  }
-  
   const clearManga2Btn = document.getElementById('clearManga2');
   if (clearManga2Btn) {
     clearManga2Btn.addEventListener('click', () => {
@@ -647,7 +635,7 @@ function setupCommentsMangaSearch() {
         selectedCommentsManga = JSON.parse(info);
         input.value = title;
         list.innerHTML = '';
-        loadChaptersForManga(selectedCommentsManga.id);
+        // Теперь не нужно загружать главы - комментарии будут по всем главам
       });
     });
   });
@@ -659,55 +647,10 @@ function setupCommentsMangaSearch() {
   });
 }
 
-async function loadChaptersForManga(mangaId) {
-  const chapterSelect = document.getElementById('lastChapterSelect');
-  if (!chapterSelect) return;
-  
-  chapterSelect.innerHTML = '<option value="">Загрузка глав...</option>';
-  
-  try {
-    const manga = allMangas.find(m => m.id === mangaId);
-    if (!manga) return;
-    
-    const slug = manga.url.match(/\/ru\/manga\/(\d+--[^?]+)/)?.[1];
-    if (!slug) return;
-    
-    const response = await fetch(`https://api.cdnlibs.org/api/manga/${slug}/chapters`, {
-      headers: { 'Site-Id': '1', 'Accept': 'application/json' }
-    });
-    
-    if (!response.ok) throw new Error('API error');
-    const data = await response.json();
-    
-    const chapters = data.data || [];
-    
-    if (!chapters.length) {
-      chapterSelect.innerHTML = '<option value="">Нет глав</option>';
-      return;
-    }
-    
-    chapterSelect.innerHTML = '<option value="">Выберите главу</option>' + 
-      chapters.slice(-20).reverse().map(ch => 
-        `<option value="${ch.number}" data-volume="${ch.volume || 1}">Гл. ${ch.number} (том ${ch.volume || 1})</option>`
-      ).join('');
-  } catch (e) {
-    chapterSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
-  }
-}
+// Убрали функцию loadChaptersForManga - теперь загружаем комментарии по всем главам
 
-function setupCommentsControls() {
-  const sourceTypeSelect = document.getElementById('commentSourceType');
-  const chapterSelect = document.getElementById('lastChapterSelect');
-  
-  if (sourceTypeSelect && chapterSelect) {
-    sourceTypeSelect.addEventListener('change', () => {
-      chapterSelect.style.display = sourceTypeSelect.value === 'chapter' ? 'block' : 'none';
-    });
-  }
-  
-  document.getElementById('loadCommentsBtn')?.addEventListener('click', loadComments);
-  document.getElementById('markCommentsReadBtn')?.addEventListener('click', markCommentsAsRead);
-}
+document.getElementById('loadCommentsBtn')?.addEventListener('click', loadComments);
+document.getElementById('markCommentsReadBtn')?.addEventListener('click', markCommentsAsRead);
 
 async function loadComments() {
   if (!selectedCommentsManga) {
@@ -733,8 +676,10 @@ async function loadComments() {
     
     if (mangaCommentsResponse.ok) {
       const mangaCommentsData = await mangaCommentsResponse.json();
-      const mangaComments = mangaCommentsData.data || [];
-      allComments.push(...mangaComments.map(c => ({ ...c, _source: 'manga' })));
+      const mangaComments = Array.isArray(mangaCommentsData?.data) ? mangaCommentsData.data : (Array.isArray(mangaCommentsData) ? mangaCommentsData : []);
+      if (mangaComments.length > 0) {
+        allComments.push(...mangaComments.map(c => ({ ...c, _source: 'manga' })));
+      }
     }
     
     // Загружаем главы и комментарии к ним
@@ -745,7 +690,7 @@ async function loadComments() {
     
     if (chaptersResponse.ok) {
       const chaptersData = await chaptersResponse.json();
-      const chapters = chaptersData.data || [];
+      const chapters = Array.isArray(chaptersData?.data) ? chaptersData.data : (Array.isArray(chaptersData) ? chaptersData : []);
       
       // Загружаем комментарии для каждой главы (последние 50 глав чтобы не перегружать)
       const recentChapters = chapters.slice(-50);
@@ -761,13 +706,15 @@ async function loadComments() {
           
           if (chapterCommentsResponse.ok) {
             const chapterCommentsData = await chapterCommentsResponse.json();
-            const chapterComments = chapterCommentsData.data || [];
-            allComments.push(...chapterComments.map(c => ({ 
-              ...c, 
-              _source: 'chapter',
-              _chapterNumber: chapter.number,
-              _chapterVolume: chapter.volume
-            })));
+            const chapterComments = Array.isArray(chapterCommentsData?.data) ? chapterCommentsData.data : (Array.isArray(chapterCommentsData) ? chapterCommentsData : []);
+            if (chapterComments.length > 0) {
+              allComments.push(...chapterComments.map(c => ({ 
+                ...c, 
+                _source: 'chapter',
+                _chapterNumber: chapter.number,
+                _chapterVolume: chapter.volume
+              })));
+            }
           }
         } catch (e) {
           console.error(`Ошибка загрузки комментариев главы ${chapter.number}:`, e);
